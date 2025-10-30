@@ -41,6 +41,8 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       trim: true,
+      unique: true,
+      sparse: true, // Allows multiple null values but enforces uniqueness for non-null values
       match: [/^\+?[0-9]\d{9,14}$/, "Please provide a valid phone number"],
     },
     profileImage: {

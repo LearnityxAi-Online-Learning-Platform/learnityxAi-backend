@@ -36,10 +36,18 @@ const register = async (req, res) => {
     // Handle existing email registations
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return sendErrorResponse(res, 409, "Email already registerd");
+      return sendErrorResponse(res, 409, "Email already registered");
     }
 
-    // Handle invlid user roles
+    // Handle existing phone number
+    if (phone) {
+      const existingPhone = await User.findOne({ phone });
+      if (existingPhone) {
+        return sendErrorResponse(res, 409, "Phone number already registered");
+      }
+    }
+
+    // Handle invalid user roles
     if (role && !["student", "instructor"].includes(role)) {
       return sendErrorResponse(res, 400, "Invalid user role");
     }
@@ -351,6 +359,14 @@ const updateProfile = async (req, res) => {
       return sendErrorResponse(res, 404, "User not found");
     }
 
+    // Check if phone number is being changed and if it's already taken
+    if (phone && phone !== user.phone) {
+      const existingPhone = await User.findOne({ phone });
+      if (existingPhone) {
+        return sendErrorResponse(res, 409, "Phone number already registered");
+      }
+    }
+
     if (firstName) user.firstName = firstName;
     if (lastName) user.lastName = lastName;
     if (phone) user.phone = phone;
@@ -388,6 +404,16 @@ const changePassword = async (req, res) => {
     const isPasswordValid = await user.comparePassword(currentPassword);
     if (!isPasswordValid) {
       return sendErrorResponse(res, 401, "Current password is incorrect");
+    }
+
+    // Check if new password is same as current password
+    const isSamePassword = await user.comparePassword(newPassword);
+    if (isSamePassword) {
+      return sendErrorResponse(
+        res,
+        400,
+        "New password cannot be the same as current password"
+      );
     }
 
     user.password = newPassword;
