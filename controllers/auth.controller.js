@@ -217,12 +217,12 @@ const forgotPassword = async (req, res) => {
 
     const otp = generateOTP();
 
-    await OTP.deleteMany({ email, purpose: "password reset" });
+    await OTP.deleteMany({ email, purpose: "password_reset" });
 
     await OTP.create({
       email,
       otp,
-      purpose: "password reset",
+      purpose: "password_reset",
     });
 
     await sendOTPEmail(email, otp, `${user.firstName} ${user.lastName}`);
@@ -283,7 +283,7 @@ const resetPassword = async (req, res) => {
       return sendErrorResponse(res, 400, "Validation failed", errors.array());
     }
 
-    const { email, password, newPassword } = req.body;
+    const { email, otp, newPassword } = req.body;
 
     const otpRecord = await OTP.findOne({
       email,
