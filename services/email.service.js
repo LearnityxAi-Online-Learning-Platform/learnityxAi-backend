@@ -38,7 +38,7 @@ const getEmailStyles = () => `
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   }
   .header {
-    background: linear-gradient(135deg, #2C3E9F 0%, #8B5CF6 100%);
+    background: linear-gradient(135deg, #7B8FE6 0%, #DDD6FE 100%);
     padding: 40px 30px;
     text-align: center;
   }
@@ -297,7 +297,6 @@ const sendWelcomeEmail = async (email, userName, role) => {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <meta http-equiv="X-UA-Compatible" content="IE=edge">
-          <title>Welcome to LearnityyxAi</title>
           <style>${getEmailStyles()}</style>
         </head>
         <body>
