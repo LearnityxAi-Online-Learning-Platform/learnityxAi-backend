@@ -1,4 +1,4 @@
-// Base email styles for consistency
+// Base email styles for consistency across all email templates
 const getEmailStyles = () => `
   * {
     margin: 0;
