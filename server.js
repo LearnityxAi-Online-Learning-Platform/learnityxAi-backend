@@ -1,5 +1,9 @@
-const express = require("express");
 const dotenv = require("dotenv");
+
+// Load environment variables FIRST before any other imports
+dotenv.config();
+
+const express = require("express");
 const cors = require("cors");
 const connectDatabase = require("./config/database");
 const authRoutes = require("./routes/auth.routes");
@@ -9,8 +13,6 @@ const {
   notFoundHandler,
   errorHandler,
 } = require("./middleware/errorHandler.middleware");
-
-dotenv.config();
 
 const app = express();
 
