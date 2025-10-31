@@ -3,6 +3,12 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const connectDatabase = require("./config/database");
 const authRoutes = require("./routes/auth.routes");
+const courseRoutes = require("./routes/course.routes");
+const uploadRoutes = require("./routes/upload.routes");
+const {
+  notFoundHandler,
+  errorHandler,
+} = require("./middleware/errorHandler.middleware");
 
 dotenv.config();
 
@@ -32,22 +38,14 @@ app.get("/", (req, res) => {
   });
 });
 
+// base rotes
 app.use("/api/auth", authRoutes);
+app.use("/api/courses", courseRoutes);
+app.use("/api/upload", uploadRoutes);
 
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
-  });
-});
-
-app.use((err, req, res, next) => {
-  console.error("Global error handler:", err);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || "Internal server error",
-  });
-});
+// Error handling middleware
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
