@@ -378,7 +378,7 @@ const getDurationsList = async (req, res) => {
 const searchCourses = async (req, res) => {
   try {
     const {
-      q,
+      search,
       page = 1,
       size = 10,
       category,
@@ -387,7 +387,7 @@ const searchCourses = async (req, res) => {
       minRating,
     } = req.query;
 
-    if (!q) {
+    if (!search) {
       return sendErrorResponse(res, 400, "Search query is required");
     }
 
@@ -395,11 +395,11 @@ const searchCourses = async (req, res) => {
     let query = {
       isActive: true,
       $or: [
-        { courseName: { $regex: q, $options: "i" } },
-        { description: { $regex: q, $options: "i" } },
-        { skills: { $regex: q, $options: "i" } },
-        { tools: { $regex: q, $options: "i" } },
-        { instructorName: { $regex: q, $options: "i" } },
+        { courseName: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { skills: { $regex: search, $options: "i" } },
+        { tools: { $regex: search, $options: "i" } },
+        { instructorName: { $regex: search, $options: "i" } },
       ],
     };
 
@@ -443,11 +443,11 @@ const searchCourses = async (req, res) => {
         hasNextPage: pageNum < totalPages,
         hasPrevPage: pageNum > 1,
       },
-      searchQuery: q,
+      searchQuery: search,
     });
   } catch (error) {
     console.error("Search courses error:", error);
-    return sendErrorResponse(res, 500, "Server error while searching courses");
+    return sendErrorResponse(res, 500, "Internal Server error fail to searching courses");
   }
 };
 
