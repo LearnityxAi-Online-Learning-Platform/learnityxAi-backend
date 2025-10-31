@@ -1,7 +1,9 @@
 const nodemailer = require("nodemailer");
 const { otpEmailTemplate } = require("../email_templates/otpEmail");
 const { welcomeEmailTemplate } = require("../email_templates/welcomeEmail");
-const { enrollmentEmailTemplate } = require("../email_templates/enrollmentEmail");
+const {
+  enrollmentEmailTemplate,
+} = require("../email_templates/enrollmentEmail");
 
 const createTransporter = () => {
   return nodemailer.createTransport({
@@ -90,7 +92,8 @@ const sendEnrollmentEmail = async (
   email,
   userName,
   courseName,
-  instructorName
+  instructorName,
+  courseDetails
 ) => {
   try {
     const transporter = createTransporter();
@@ -101,7 +104,12 @@ const sendEnrollmentEmail = async (
       }>`,
       to: email,
       subject: `Enrollment Confirmed: ${courseName}`,
-      html: enrollmentEmailTemplate(userName, courseName, instructorName),
+      html: enrollmentEmailTemplate(
+        userName,
+        courseName,
+        instructorName,
+        courseDetails
+      ),
       attachments: [
         {
           filename: "logo.png",

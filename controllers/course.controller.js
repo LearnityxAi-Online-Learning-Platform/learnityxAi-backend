@@ -1,0 +1,586 @@
+const { validationResult } = require("express-validator");
+const Course = require("../models/Course.model");
+const User = require("../models/User.model");
+const {
+  sendSuccessResponse,
+  sendErrorResponse,
+} = require("../utils/responseHandler");
+
+// create new course
+const createCourse = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return sendErrorResponse(res, 400, "Validation failed", errors.array());
+    }
+
+    const {
+      courseName,
+      courseCategory,
+      description,
+      skills,
+      tools,
+      startingDate,
+      duration,
+      price,
+      courseFlyerURL,
+    } = req.body;
+
+    // Validate Instructor
+    const instructor = await User.findById(req.user._id);
+    if (!instructor) {
+      return sendErrorResponse(res, 404, "Instructor not found");
+    }
+
+    const instructorName = `${instructor.firstName} ${instructor.lastName}`;
+
+    const course = await Course.create({
+      courseName,
+      courseCategory,
+      instructorId: req.user._id,
+      instructorName,
+      description,
+      skills,
+      tools: tools || [],
+      startingDate,
+      duration,
+      price,
+      courseFlyerURL,
+    });
+
+    return sendSuccessResponse(res, 201, "Course created successfully", {
+      course,
+    });
+  } catch (error) {
+    console.error("Create course error:", error);
+    return sendErrorResponse(res, 500, "Server error while creating course");
+  }
+};
+
+// get all courses
+const getAllCourses = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      size = 10,
+      search,
+      category,
+      skills,
+      tools,
+      instructorName,
+      minPrice,
+      maxPrice,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    // Build Serch query
+    let query = { isActive: true };
+    if (search) {
+      query.$or = [
+        { courseName: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // filter by category
+    if (category) {
+      query.courseCategory = category;
+    }
+
+    // filter byt skills
+    if (skills) {
+      const skillsArray = skills.split(",").map((s) => s.trim());
+      query.skills = { $in: skillsArray };
+    }
+
+    // folter by tools
+    if (tools) {
+      const toolsArray = tools.split(",").map((t) => t.trim());
+      query.tools = { $in: toolsArray };
+    }
+
+    // filter by instructor name
+    if (instructorName) {
+      query.instructorName = { $regex: instructorName, $options: "i" };
+    }
+
+    // filter by price
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = Number(minPrice);
+      if (maxPrice) query.price.$lte = Number(maxPrice);
+    }
+
+    // pagination related
+    const pageNum = Math.max(1, parseInt(page));
+    const pageSize = Math.min(50, Math.max(1, parseInt(size)));
+    const skip = (pageNum - 1) * pageSize;
+
+    // sort the result to ascending order
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === "asc" ? 1 : -1;
+
+    // query the DB
+    const courses = await Course.find(query)
+      .sort()
+      .skip()
+      .limit()
+      .select("enrolledStudents")
+      .lean();
+
+    const totalCourses = await Course.countDocuments(query);
+    const totalPages = Math.ceil(totalCourses / pageSize);
+
+     return sendSuccessResponse(res, 200, "Courses retrieved successfully", {
+       courses,
+       pagination: {
+         currentPage: pageNum,
+         pageSize: pageSize,
+         totalCourses,
+         totalPages,
+         hasNextPage: pageNum < totalPages,
+         hasPrevPage: pageNum > 1,
+       },
+     });
+
+
+  } catch (error) {
+    console.error("Get all courses error:", error);
+    return sendErrorResponse(res, 500, "Server error while fetching courses");
+  }
+};
+
+
+// get courses for instrutor
+
+const getInstructorCourses = async (req, res) => {
+  try {
+    const { page = 1, size = 10 } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page));
+    const pageSize = Math.min(50, Math.max(1, parseInt(size)));
+    const skip = (pageNum - 1) * pageSize;
+
+    const query = { instructorId: req.user._id };
+
+    const courses = await Course.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize)
+      .populate("enrolledStudents", "firstName lastName email")
+      .lean();
+
+    const totalCourses = await Course.countDocuments(query);
+    const totalPages = Math.ceil(totalCourses / pageSize);
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "Instructor courses retrieved successfully",
+      {
+        courses,
+        pagination: {
+          currentPage: pageNum,
+          pageSize: pageSize,
+          totalCourses,
+          totalPages,
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Get instructor courses error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Server error while fetching instructor courses"
+    );
+  }
+};
+
+// get course by ID 
+const getCourseById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const course = await Course.findById(id)
+      .populate("instructorId", "firstName lastName email profileImage bio")
+      .populate("enrolledStudents", "firstName lastName email profileImage")
+      .lean();
+
+    if (!course) {
+      return sendErrorResponse(res, 404, "Course not found");
+    }
+
+    return sendSuccessResponse(res, 200, "Course retrieved successfully", {
+      course,
+    });
+  } catch (error) {
+    console.error("Get course by ID error:", error);
+    return sendErrorResponse(res, 500, "Server error while fetching course");
+  }
+};
+
+// Update course
+const updateCourse = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return sendErrorResponse(res, 400, "Validation failed", errors.array());
+    }
+
+    const { id } = req.params;
+
+    const course = await Course.findById(id);
+
+    if (!course) {
+      return sendErrorResponse(res, 404, "Course not found");
+    }
+
+    // Check if the instructor is the owner of the course
+    if (course.instructorId.toString() !== req.user._id.toString()) {
+      return sendErrorResponse(
+        res,
+        403,
+        "You are not authorized to update this course"
+      );
+    }
+
+    const {
+      courseName,
+      courseCategory,
+      description,
+      skills,
+      tools,
+      startingDate,
+      duration,
+      price,
+      courseFlyerURL,
+      isActive,
+    } = req.body;
+
+    // Update fields
+    if (courseName) course.courseName = courseName;
+    if (courseCategory) course.courseCategory = courseCategory;
+    if (description) course.description = description;
+    if (skills) course.skills = skills;
+    if (tools !== undefined) course.tools = tools;
+    if (startingDate) course.startingDate = startingDate;
+    if (duration) course.duration = duration;
+    if (price !== undefined) course.price = price;
+    if (courseFlyerURL) course.courseFlyerURL = courseFlyerURL;
+    if (isActive !== undefined) course.isActive = isActive;
+
+    await course.save();
+
+    return sendSuccessResponse(res, 200, "Course updated successfully", {
+      course,
+    });
+  } catch (error) {
+    console.error("Update course error:", error);
+    return sendErrorResponse(res, 500, "Internal Server fail to update course");
+  }
+};
+
+// delete the course
+const deleteCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const course = await Course.findById(id);
+
+    if (!course) {
+      return sendErrorResponse(res, 404, "Course not found");
+    }
+
+    // Check if the instructor is the owner of the course
+    if (course.instructorId.toString() !== req.user._id.toString()) {
+      return sendErrorResponse(
+        res,
+        403,
+        "You are not authorized to delete this course"
+      );
+    }
+
+    // Soft delete using isAciv=false
+    course.isActive = false;
+    await course.save();
+
+    // hard delete: by course id
+    // await Course.findByIdAndDelete(id);
+
+    return sendSuccessResponse(res, 200, "Course deleted successfully");
+  } catch (error) {
+    console.error("Delete course error:", error);
+    return sendErrorResponse(res, 500, "Server error while deleting course");
+  }
+};
+
+// get course cat1gories
+const getCourseCategories = async (req, res) => {
+  try {
+    const categories = Course.getCategories();
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "Course categories retrieved successfully",
+      {
+        categories,
+      }
+    );
+  } catch (error) {
+    console.error("Get categories error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Server error while fetching categories"
+    );
+  }
+};
+
+// get tool list
+const getToolsList = async (req, res) => {
+  try {
+    const tools = Course.getTools();
+
+    return sendSuccessResponse(res, 200, "Tools list retrieved successfully", {
+      tools,
+    });
+  } catch (error) {
+    console.error("Get tools error:", error);
+    return sendErrorResponse(res, 500, "Server error while fetching tools");
+  }
+};
+
+// get dureation list
+const getDurationsList = async (req, res) => {
+  try {
+    const durations = Course.getDurations();
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "Durations list retrieved successfully",
+      {
+        durations,
+      }
+    );
+  } catch (error) {
+    console.error("Get durations error:", error);
+    return sendErrorResponse(res, 500, "Server error while fetching durations");
+  }
+};
+
+// search course
+const searchCourses = async (req, res) => {
+  try {
+    const {
+      search,
+      page = 1,
+      size = 10,
+      category,
+      minPrice,
+      maxPrice,
+      minRating,
+    } = req.query;
+
+    if (!search) {
+      return sendErrorResponse(res, 400, "Search query is required");
+    }
+
+    // Build search query
+    let query = {
+      isActive: true,
+      $or: [
+        { courseName: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { skills: { $regex: search, $options: "i" } },
+        { tools: { $regex: search, $options: "i" } },
+        { instructorName: { $regex: search, $options: "i" } },
+      ],
+    };
+
+    // Apply filters
+    if (category) {
+      query.courseCategory = category;
+    }
+
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = Number(minPrice);
+      if (maxPrice) query.price.$lte = Number(maxPrice);
+    }
+
+    if (minRating) {
+      query.rating = { $gte: Number(minRating) };
+    }
+
+    // Pagination
+    const pageNum = Math.max(1, parseInt(page));
+    const pageSize = Math.min(50, Math.max(1, parseInt(size)));
+    const skip = (pageNum - 1) * pageSize;
+
+    const courses = await Course.find(query)
+      .sort({ rating: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize)
+      .select("-enrolledStudents")
+      .lean();
+
+    const totalCourses = await Course.countDocuments(query);
+    const totalPages = Math.ceil(totalCourses / pageSize);
+
+    return sendSuccessResponse(res, 200, "Search results retrieved", {
+      courses,
+      pagination: {
+        currentPage: pageNum,
+        pageSize: pageSize,
+        totalCourses,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+      },
+      searchQuery: search,
+    });
+  } catch (error) {
+    console.error("Search courses error:", error);
+    return sendErrorResponse(res, 500, "Internal Server error fail to searching courses");
+  }
+};
+
+
+// student enrole to course
+const enrollInCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const course = await Course.findById(id);
+
+    if (!course) {
+      return sendErrorResponse(res, 404, "Course not found");
+    }
+
+    if (!course.isActive) {
+      return sendErrorResponse(res, 400, "This course is no longer available");
+    }
+
+    // Check if already enrolled
+    if (course.enrolledStudents.includes(req.user._id)) {
+      return sendErrorResponse(res, 400, "Already enrolled in this course");
+    }
+
+    // Add student to enrolled students
+    course.enrolledStudents.push(req.user._id);
+    course.numberOfUserEnrolled = course.enrolledStudents.length;
+    await course.save();
+
+    // Prepare course details for email
+    const courseDetails = {
+      startingDate: course.startingDate,
+      duration: course.duration,
+      description: course.description,
+      price: course.price,
+      courseFlyerURL: course.courseFlyerURL,
+      skills: course.skills,
+      tools: course.tools,
+    };
+
+    // Send enrollment confirmation email
+    const userName = `${req.user.firstName} ${req.user.lastName}`;
+    const { sendEnrollmentEmail } = require("../services/email.service");
+
+    // Send email
+    sendEnrollmentEmail(
+      req.user.email,
+      userName,
+      course.courseName,
+      course.instructorName,
+      courseDetails
+    ).catch((error) => {
+      console.error("Failed to send enrollment email:", error);
+    });
+
+    return sendSuccessResponse(res, 200, "Successfully enrolled in course", {
+      courseId: course._id,
+      courseName: course.courseName,
+      startingDate: course.startingDate,
+      message: "A confirmation email has been sent to your email address",
+    });
+  } catch (error) {
+    console.error("Enroll in course error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Internal Server error. Fail to enrolling in course"
+    );
+  }
+};
+
+// get enrolled course
+const getEnrolledCourses = async (req, res) => {
+  try {
+    const { page = 1, size = 10 } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page));
+    const pageSize = Math.min(50, Math.max(1, parseInt(size)));
+    const skip = (pageNum - 1) * pageSize;
+
+    const query = {
+      enrolledStudents: req.user._id,
+      isActive: true,
+    };
+
+    const courses = await Course.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize)
+      .select("-enrolledStudents")
+      .lean();
+
+    const totalCourses = await Course.countDocuments(query);
+    const totalPages = Math.ceil(totalCourses / pageSize);
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "Enrolled courses retrieved successfully",
+      {
+        courses,
+        pagination: {
+          currentPage: pageNum,
+          pageSize: pageSize,
+          totalCourses,
+          totalPages,
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Get enrolled courses error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Internal Server error. Faile to fetching enrolled courses"
+    );
+  }
+};
+
+
+module.exports = {
+  createCourse,
+  getAllCourses,
+  getInstructorCourses,
+  getCourseById,
+  updateCourse,
+  deleteCourse,
+  getCourseCategories,
+  getToolsList,
+  getDurationsList,
+  searchCourses,
+  enrollInCourse,
+  getEnrolledCourses,
+};
