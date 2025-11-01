@@ -83,30 +83,26 @@ const generateCourseRecommendations = async (
       .join("\n");
 
     // Create optimized prompt for ChatGPT
-    prompt = `You are an AI course recommendation expert. Analyze the user's learning profile and recommend the most suitable courses.
+    prompt = `You are an AI course recommendation expert.
+Analyze the user's learning profile and suggest the best courses.
 
-User's Enrolled Courses: ${enrolledCoursesText}
+User's Enrolled Courses:
+${enrolledCoursesText}
 
-User's Recent Search Queries: ${searchQueriesText}
+Recent Search Queries: ${searchQueriesText}
 
 Available Courses:
 ${availableCoursesText}
 
 Instructions:
-1. Analyze the user's learning path based on their enrolled courses and search interests
-2. Recommend courses that complement their existing knowledge and match their interests
-3. Prioritize courses with higher ratings and more ratings
-4. Consider the skills and tools the user is learning
-5. Return ONLY a JSON array of course IDs in order of recommendation (most relevant first)
-6. Recommend maximum 15 courses
-7. Response format must be exactly: ["courseId1", "courseId2", "courseId3", ...]
-8. Do not include any explanation, just the JSON array
-
-Your response:`;
+1. Recommend up to 15 relevant courses.
+2. Prioritize high ratings and relevant skills.
+3. Output only JSON array of course IDs, no text.
+4. Format: ["courseId1", "courseId2", ...]`;
 
     // Call ChatGPT API
     const response = await openai.chat.completions.create({
-      model: "gpt-3-Davinci",
+      model: "gpt-5-nano",
       messages: [
         {
           role: "system",

@@ -78,6 +78,34 @@ const getAllCourses = async (req, res) => {
     // Save search history for authenticated users
     if (req.user && search) {
       try {
+        // Check current search history count for this user
+        const searchCount = await SearchHistory.countDocuments({
+          userId: req.user._id,
+        });
+
+        console.log(`[SearchHistory - getAllCourses] User ${req.user._id} has ${searchCount} searches`);
+
+        // If user has 15 or more searches, delete the oldest ones
+        const MAX_SEARCH_HISTORY = 3; // TODO: Change back to 15 for production
+        if (searchCount >= MAX_SEARCH_HISTORY) {
+          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1), so we can add 1 new
+          console.log(`[SearchHistory - getAllCourses] Need to delete ${excessCount} old searches`);
+
+          const oldestSearches = await SearchHistory.find({
+            userId: req.user._id,
+          })
+            .sort({ createdAt: 1 })
+            .limit(excessCount)
+            .select("_id");
+
+          const idsToDelete = oldestSearches.map((search) => search._id);
+          console.log(`[SearchHistory - getAllCourses] Deleting IDs:`, idsToDelete);
+
+          const deleteResult = await SearchHistory.deleteMany({ _id: { $in: idsToDelete } });
+          console.log(`[SearchHistory - getAllCourses] Deleted ${deleteResult.deletedCount} searches`);
+        }
+
+        // Create new search history entry
         await SearchHistory.create({
           userId: req.user._id,
           searchQuery: search,
@@ -90,6 +118,7 @@ const getAllCourses = async (req, res) => {
             maxPrice: maxPrice ? Number(maxPrice) : undefined,
           },
         });
+        console.log(`[SearchHistory - getAllCourses] Created new search entry for query: "${search}"`);
       } catch (searchError) {
         console.error("Error saving search history:", searchError);
       }
@@ -411,6 +440,34 @@ const searchCourses = async (req, res) => {
     // Save search history for authenticated users
     if (req.user) {
       try {
+        // Check current search history count for this user
+        const searchCount = await SearchHistory.countDocuments({
+          userId: req.user._id,
+        });
+
+        console.log(`[SearchHistory] User ${req.user._id} has ${searchCount} searches`);
+
+        // If user has 10 or more searches, delete the oldest ones
+        const MAX_SEARCH_HISTORY = 10;
+        if (searchCount >= MAX_SEARCH_HISTORY) {
+          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1), so we can add 1 new
+          // console.log(`[SearchHistory] Need to delete ${excessCount} old searches`);
+
+          const oldestSearches = await SearchHistory.find({
+            userId: req.user._id,
+          })
+            .sort({ createdAt: 1 })
+            .limit(excessCount)
+            .select("_id");
+
+          const idsToDelete = oldestSearches.map((search) => search._id);
+          // console.log(`[SearchHistory] Deleting IDs:`, idsToDelete);
+
+          const deleteResult = await SearchHistory.deleteMany({ _id: { $in: idsToDelete } });
+          // console.log(`[SearchHistory] Deleted ${deleteResult.deletedCount} searches`);
+        }
+
+        // Create new search history entry
         await SearchHistory.create({
           userId: req.user._id,
           searchQuery: search,
@@ -422,6 +479,7 @@ const searchCourses = async (req, res) => {
             minRating: minRating ? Number(minRating) : undefined,
           },
         });
+        console.log(`[SearchHistory] Created new search entry for query: "${search}"`);
       } catch (searchError) {
         console.error("Error saving search history:", searchError);
       }
