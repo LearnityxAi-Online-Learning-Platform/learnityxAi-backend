@@ -8,6 +8,14 @@ const {
   generateCourseRecommendations,
   getAPIUsageStats,
 } = require("../services/chatgpt.service");
+const {
+  checkUserRequestLimit,
+  getUserUsageSummary,
+} = require("../utils/perUserRateLimit");
+const {
+  checkCache,
+  saveToCache,
+} = require("../utils/recommendationCache");
 
 // Get course recommendations for authenticated users using ChatGPT
 const getRecommendations = async (req, res) => {
@@ -15,10 +23,18 @@ const getRecommendations = async (req, res) => {
     const userId = req.user._id;
     const { page = 1, size = 10 } = req.query;
 
-    // Check API usage before proceeding
+    // Check global API usage before proceeding
     const apiStats = getAPIUsageStats();
     console.log(
-      `API Usage: ${apiStats.totalCalls}/${apiStats.maxCalls} (${apiStats.percentageUsed} used)`
+      `[Global API Usage] ${apiStats.totalCalls}/${apiStats.maxCalls} (${apiStats.percentageUsed} used)`
+    );
+
+    // Check per-user request limit (2 calls per day)
+    const userLimitCheck = await checkUserRequestLimit(userId);
+    const userUsage = await getUserUsageSummary(userId);
+
+    console.log(
+      `[User API Usage] User ${userId} - ${userUsage.dailyRequestsUsed}/${userUsage.dailyRequestsLimit} requests used today`
     );
 
     // Fetch user's enrolled courses
@@ -35,6 +51,44 @@ const getRecommendations = async (req, res) => {
       .limit(30)
       .select("searchQuery filters")
       .lean();
+
+    // Check cache first - if valid cached result exists, return it
+    const cacheResult = await checkCache(userId, enrolledCourses, searchHistory);
+
+    if (cacheResult.cached && cacheResult.data) {
+      console.log(
+        `[Cache Hit] User ${userId} - Returning cached recommendations (no API call made)`
+      );
+
+      // Return cached response with updated API usage stats
+      const responseData = {
+        ...cacheResult.data,
+        cached: true,
+        cacheSource: "24-hour cache",
+        userUsage,
+        apiUsage: {
+          global: {
+            used: apiStats.totalCalls,
+            remaining: apiStats.remainingCalls,
+            limit: apiStats.maxCalls,
+            percentageUsed: apiStats.percentageUsed,
+          },
+          personal: {
+            used: userUsage.dailyRequestsUsed,
+            remaining: userUsage.remainingRequests,
+            limit: userUsage.dailyRequestsLimit,
+            hoursUntilReset: userUsage.hoursUntilReset,
+          },
+        },
+      };
+
+      return sendSuccessResponse(
+        res,
+        200,
+        "Cached AI-powered course recommendations retrieved successfully",
+        responseData
+      );
+    }
 
     // Fetch all available courses that user hasn't enrolled in
     const availableCourses = await Course.find({
@@ -72,69 +126,90 @@ const getRecommendations = async (req, res) => {
     let sortedCourses = [];
     let recommendationType = "rating-based";
     let errorMessage = null;
+    let shouldCallChatGPT = false;
 
-    // Try to generate recommendations using ChatGPT
-    try {
-      const recommendedCourseIds = await generateCourseRecommendations(
-        enrolledCourses,
-        searchHistory,
-        availableCourses
+    // Check if user can make a ChatGPT request (per-user limit check)
+    if (!userLimitCheck.canMakeRequest) {
+      console.warn(
+        `[Per-User Limit] User ${userId} - Daily limit reached (${userUsage.dailyRequestsUsed}/${userUsage.dailyRequestsLimit})`
       );
+      errorMessage = userLimitCheck.reason;
+      recommendationType = "rating-based";
+      sortedCourses = availableCourses;
+    } else {
+      shouldCallChatGPT = true;
+    }
 
-      if (recommendedCourseIds && recommendedCourseIds.length > 0) {
-        // Fetch recommended courses with full details
-        const recommendedCourses = await Course.find({
-          _id: { $in: recommendedCourseIds },
-          isActive: true,
-        })
-          .select("-enrolledStudents")
-          .lean();
+    // Try to generate recommendations using ChatGPT if allowed
+    if (shouldCallChatGPT) {
+      try {
+        const recommendedCourseIds = await generateCourseRecommendations(
+          enrolledCourses,
+          searchHistory,
+          availableCourses
+        );
 
-        // Sort courses based on recommendation order from ChatGPT
-        sortedCourses = recommendedCourseIds
-          .map((id) =>
-            recommendedCourses.find((course) => course._id.toString() === id)
-          )
-          .filter((course) => course !== undefined);
+        if (recommendedCourseIds && recommendedCourseIds.length > 0) {
+          // Fetch recommended courses with full details
+          const recommendedCourses = await Course.find({
+            _id: { $in: recommendedCourseIds },
+            isActive: true,
+          })
+            .select("-enrolledStudents")
+            .lean();
 
-        recommendationType = "ai-powered";
+          // Sort courses based on recommendation order from ChatGPT
+          sortedCourses = recommendedCourseIds
+            .map((id) =>
+              recommendedCourses.find((course) => course._id.toString() === id)
+            )
+            .filter((course) => course !== undefined);
 
-        // If ChatGPT didn't return enough courses, add rating-based courses
-        if (sortedCourses.length < 10) {
-          const existingIds = sortedCourses.map((c) => c._id.toString());
-          const additionalCourses = availableCourses
-            .filter((c) => !existingIds.includes(c._id.toString()))
-            .slice(0, 10 - sortedCourses.length);
-          sortedCourses = [...sortedCourses, ...additionalCourses];
+          recommendationType = "ai-powered";
+
+          // If ChatGPT didn't return enough courses, add rating-based courses
+          if (sortedCourses.length < 10) {
+            const existingIds = sortedCourses.map((c) => c._id.toString());
+            const additionalCourses = availableCourses
+              .filter((c) => !existingIds.includes(c._id.toString()))
+              .slice(0, 10 - sortedCourses.length);
+            sortedCourses = [...sortedCourses, ...additionalCourses];
+          }
+
+          // Cache the successful AI-powered recommendations
+          await saveToCache(userId, cacheResult.stateHash, {
+            courses: sortedCourses,
+            recommendationType: "ai-powered",
+          });
+        } else {
+          // ChatGPT returned empty array, use rating-based
+          sortedCourses = availableCourses;
         }
-      } else {
-        // ChatGPT returned empty array, use rating-based
+      } catch (error) {
+        console.error("Error generating ChatGPT recommendations:", error);
+
+        // Check if it's an API limit error
+        if (error.message === "API_LIMIT_REACHED") {
+          recommendationType = "rating-based";
+          errorMessage =
+            "Global AI recommendation limit reached. Showing courses based on ratings.";
+          console.warn(
+            "⚠️  ChatGPT API limit reached. Falling back to rating-based recommendations."
+          );
+        } else {
+          // Other error, fallback to rating-based
+          recommendationType = "rating-based";
+          errorMessage =
+            "AI recommendations temporarily unavailable. Showing courses based on ratings.";
+          console.error(
+            "ChatGPT error, falling back to rating-based recommendations:",
+            error.message
+          );
+        }
+
+        // Use all available courses sorted by rating
         sortedCourses = availableCourses;
       }
-    } catch (error) {
-      console.error("Error generating ChatGPT recommendations:", error);
-
-      // Check if it's an API limit error
-      if (error.message === "API_LIMIT_REACHED") {
-        recommendationType = "rating-based";
-        errorMessage =
-          "AI recommendation limit reached. Showing courses based on ratings.";
-        console.warn(
-          "⚠️  ChatGPT API limit reached. Falling back to rating-based recommendations."
-        );
-      } else {
-        // Other error, fallback to rating-based
-        recommendationType = "rating-based";
-        errorMessage =
-          "AI recommendations temporarily unavailable. Showing courses based on ratings.";
-        console.error(
-          "ChatGPT error, falling back to rating-based recommendations:",
-          error.message
-        );
-      }
-
-      // Use all available courses sorted by rating
-      sortedCourses = availableCourses;
     }
 
     // Apply pagination
@@ -161,11 +236,20 @@ const getRecommendations = async (req, res) => {
         hasPrevPage: pageNum > 1,
       },
       recommendationType,
+      cached: false,
       apiUsage: {
-        used: updatedApiStats.totalCalls,
-        remaining: updatedApiStats.remainingCalls,
-        limit: updatedApiStats.maxCalls,
-        percentageUsed: updatedApiStats.percentageUsed,
+        global: {
+          used: updatedApiStats.totalCalls,
+          remaining: updatedApiStats.remainingCalls,
+          limit: updatedApiStats.maxCalls,
+          percentageUsed: updatedApiStats.percentageUsed,
+        },
+        personal: {
+          used: userUsage.dailyRequestsUsed,
+          remaining: userUsage.remainingRequests,
+          limit: userUsage.dailyRequestsLimit,
+          hoursUntilReset: userUsage.hoursUntilReset,
+        },
       },
     };
 
@@ -192,13 +276,16 @@ const getRecommendations = async (req, res) => {
   }
 };
 
-// Get API usage statistics
+// Get API usage statistics (global)
 const getAPIUsage = async (req, res) => {
   try {
-    const stats = getAPIUsageStats();
+    const globalStats = getAPIUsageStats();
+    const userId = req.user._id;
+    const userStats = await getUserUsageSummary(userId);
 
     return sendSuccessResponse(res, 200, "API usage statistics retrieved", {
-      usage: stats,
+      global: globalStats,
+      personal: userStats,
     });
   } catch (error) {
     console.error("Get API usage error:", error);
@@ -210,7 +297,84 @@ const getAPIUsage = async (req, res) => {
   }
 };
 
+// Get all users' API usage (Admin only)
+const getAllUsersAPIUsage = async (req, res) => {
+  try {
+    const UserAPIRequest = require("../models/UserAPIRequest.model");
+
+    // Get today's start
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    // Aggregate usage by user
+    const userUsageStats = await UserAPIRequest.aggregate([
+      {
+        $match: {
+          requestType: "chatgpt_recommendation",
+          success: true,
+          requestDate: { $gte: startOfDay },
+        },
+      },
+      {
+        $group: {
+          _id: "$userId",
+          totalRequests: { $sum: 1 },
+          lastRequestDate: { $max: "$requestDate" },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "userDetails",
+        },
+      },
+      {
+        $unwind: "$userDetails",
+      },
+      {
+        $project: {
+          userId: "$_id",
+          userName: "$userDetails.userName",
+          email: "$userDetails.email",
+          totalRequests: 1,
+          lastRequestDate: 1,
+          remainingRequests: {
+            $subtract: [2, "$totalRequests"],
+          },
+        },
+      },
+      {
+        $sort: { totalRequests: -1 },
+      },
+    ]);
+
+    const globalStats = getAPIUsageStats();
+
+    return sendSuccessResponse(res, 200, "All users API usage retrieved", {
+      global: globalStats,
+      users: userUsageStats,
+      summary: {
+        totalUsersToday: userUsageStats.length,
+        totalRequestsToday: userUsageStats.reduce(
+          (sum, u) => sum + u.totalRequests,
+          0
+        ),
+      },
+    });
+  } catch (error) {
+    console.error("Get all users API usage error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Server error while retrieving all users API usage"
+    );
+  }
+};
+
 module.exports = {
   getRecommendations,
   getAPIUsage,
+  getAllUsersAPIUsage,
 };
