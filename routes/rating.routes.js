@@ -7,7 +7,7 @@ const {
 } = require("../controllers/rating.controller");
 const { authenticateUser } = require("../middleware/auth.middleware");
 const { authorizeRoles } = require("../middleware/role.middleware");
-const { ratingValidation } = require("../middleware/validation.middleware");
+const { ratingValidation } = require("../middleware/authValidation.middleware");
 
 const router = express.Router();
 

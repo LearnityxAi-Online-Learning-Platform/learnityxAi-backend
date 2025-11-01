@@ -21,7 +21,7 @@ const {
   resetPasswordValidation,
   updateProfileValidation,
   changePasswordValidation,
-} = require("../middleware/validation.middleware");
+} = require("../middleware/authValidation.middleware");
 
 const router = express.Router();
 
