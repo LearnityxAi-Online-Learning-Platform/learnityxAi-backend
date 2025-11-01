@@ -1,6 +1,7 @@
 const { validationResult } = require("express-validator");
 const Course = require("../models/Course.model");
 const User = require("../models/User.model");
+const SearchHistory = require("../models/SearchHistory.model");
 const {
   sendSuccessResponse,
   sendErrorResponse,
@@ -74,7 +75,27 @@ const getAllCourses = async (req, res) => {
       sortOrder = "desc",
     } = req.query;
 
-    // Build Serch query
+    // Save search history for authenticated users
+    if (req.user && search) {
+      try {
+        await SearchHistory.create({
+          userId: req.user._id,
+          searchQuery: search,
+          searchType: "course_search",
+          filters: {
+            category: category || undefined,
+            skills: skills ? skills.split(",").map((s) => s.trim()) : undefined,
+            tools: tools ? tools.split(",").map((t) => t.trim()) : undefined,
+            minPrice: minPrice ? Number(minPrice) : undefined,
+            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+          },
+        });
+      } catch (searchError) {
+        console.error("Error saving search history:", searchError);
+      }
+    }
+
+    // Build Search query
     let query = { isActive: true };
     if (search) {
       query.$or = [
@@ -88,13 +109,13 @@ const getAllCourses = async (req, res) => {
       query.courseCategory = category;
     }
 
-    // filter byt skills
+    // filter by skills
     if (skills) {
       const skillsArray = skills.split(",").map((s) => s.trim());
       query.skills = { $in: skillsArray };
     }
 
-    // folter by tools
+    // filter by tools
     if (tools) {
       const toolsArray = tools.split(",").map((t) => t.trim());
       query.tools = { $in: toolsArray };
@@ -117,43 +138,39 @@ const getAllCourses = async (req, res) => {
     const pageSize = Math.min(50, Math.max(1, parseInt(size)));
     const skip = (pageNum - 1) * pageSize;
 
-    // sort the result to ascending order
+    // sort the result
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === "asc" ? 1 : -1;
 
     // query the DB
     const courses = await Course.find(query)
-      .sort()
-      .skip()
-      .limit()
-      .select("enrolledStudents")
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(pageSize)
+      .select("-enrolledStudents")
       .lean();
 
     const totalCourses = await Course.countDocuments(query);
     const totalPages = Math.ceil(totalCourses / pageSize);
 
-     return sendSuccessResponse(res, 200, "Courses retrieved successfully", {
-       courses,
-       pagination: {
-         currentPage: pageNum,
-         pageSize: pageSize,
-         totalCourses,
-         totalPages,
-         hasNextPage: pageNum < totalPages,
-         hasPrevPage: pageNum > 1,
-       },
-     });
-
-
+    return sendSuccessResponse(res, 200, "Courses retrieved successfully", {
+      courses,
+      pagination: {
+        currentPage: pageNum,
+        pageSize: pageSize,
+        totalCourses,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+      },
+    });
   } catch (error) {
     console.error("Get all courses error:", error);
     return sendErrorResponse(res, 500, "Server error while fetching courses");
   }
 };
 
-
 // get courses for instrutor
-
 const getInstructorCourses = async (req, res) => {
   try {
     const { page = 1, size = 10 } = req.query;
@@ -200,7 +217,7 @@ const getInstructorCourses = async (req, res) => {
   }
 };
 
-// get course by ID 
+// get course by ID
 const getCourseById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -304,7 +321,7 @@ const deleteCourse = async (req, res) => {
       );
     }
 
-    // Soft delete using isAciv=false
+    // Soft delete using isActive=false
     course.isActive = false;
     await course.save();
 
@@ -318,7 +335,7 @@ const deleteCourse = async (req, res) => {
   }
 };
 
-// get course cat1gories
+// get course categories
 const getCourseCategories = async (req, res) => {
   try {
     const categories = Course.getCategories();
@@ -355,7 +372,7 @@ const getToolsList = async (req, res) => {
   }
 };
 
-// get dureation list
+// get duration list
 const getDurationsList = async (req, res) => {
   try {
     const durations = Course.getDurations();
@@ -389,6 +406,25 @@ const searchCourses = async (req, res) => {
 
     if (!search) {
       return sendErrorResponse(res, 400, "Search query is required");
+    }
+
+    // Save search history for authenticated users
+    if (req.user) {
+      try {
+        await SearchHistory.create({
+          userId: req.user._id,
+          searchQuery: search,
+          searchType: "course_search",
+          filters: {
+            category: category || undefined,
+            minPrice: minPrice ? Number(minPrice) : undefined,
+            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+            minRating: minRating ? Number(minRating) : undefined,
+          },
+        });
+      } catch (searchError) {
+        console.error("Error saving search history:", searchError);
+      }
     }
 
     // Build search query
@@ -447,10 +483,13 @@ const searchCourses = async (req, res) => {
     });
   } catch (error) {
     console.error("Search courses error:", error);
-    return sendErrorResponse(res, 500, "Internal Server error fail to searching courses");
+    return sendErrorResponse(
+      res,
+      500,
+      "Internal Server error fail to searching courses"
+    );
   }
 };
-
 
 // student enrole to course
 const enrollInCourse = async (req, res) => {
@@ -568,7 +607,6 @@ const getEnrolledCourses = async (req, res) => {
     );
   }
 };
-
 
 module.exports = {
   createCourse,
