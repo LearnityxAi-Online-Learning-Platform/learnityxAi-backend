@@ -34,7 +34,7 @@ const generateCourseRecommendations = async (
     `Making ChatGPT API call. Remaining calls: ${remainingCalls}/250`
   );
 
-  let prompt = null; // Declare prompt outside try-catch so it's accessible in catch block
+  let prompt = null;
 
   try {
     // Build optimized prompt with enrolled courses
@@ -67,7 +67,6 @@ const generateCourseRecommendations = async (
         : "None";
 
     // Build available courses text with essential information
-    // Limit to top 50 courses to avoid token limits
     const topCourses = availableCourses.slice(0, 50);
     const availableCoursesText = topCourses
       .map(
@@ -134,8 +133,7 @@ Instructions:
         recommendedCourseIds = JSON.parse(match[0]);
       } else {
         console.error("Failed to parse ChatGPT response:", content);
-        // Note: API call was successful, but response parsing failed
-        // This is still counted as a successful API call since OpenAI returned a response
+        // API call was successful, but response parsing failed
         return [];
       }
     }
