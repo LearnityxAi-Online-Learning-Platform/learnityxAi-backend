@@ -1,5 +1,5 @@
 {
-  "totalCalls": 0,
+  "totalCalls": 1,
   "maxCalls": 250,
   "calls": [
     {
@@ -103,6 +103,30 @@
       "success": false,
       "error": "401 Incorrect API key provided: sk-proj-********************************************************************************************************************************************************eAoA. You can find your API key at https://platform.openai.com/account/api-keys.",
       "callNumber": null,
+      "prompt": "You are an AI course recommendation expert.\nAnalyze the user's learning profile and suggest the best courses.\n\nUser's Enrolled Courses:\nComplete Python Programming - Updated (Category: Web Development, Skills: Python, Django, Flask, REST APIs, Rating: 4/5)\n\nRecent Search Queries: python6; python5; python4\n\nAvailable Courses:\nID: 690509ef851b784765d8bf82, Name: Complete Web Development Bootcamp 2024, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\nID: 69050a15851b784765d8bfa0, Name: Complete Web Development Bootcamp 2024, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\nID: 69050afe851b784765d8bfd1, Name: Complete Web Development Bootcamp 2025, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\n\nInstructions:\n1. Recommend up to 15 relevant courses.\n2. Prioritize high ratings and relevant skills.\n3. Output only JSON array of course IDs, no text.\n4. Format: [\"courseId1\", \"courseId2\", ...]"
+    },
+    {
+      "timestamp": "2025-11-03T19:56:00.061Z",
+      "endpoint": "ChatGPT Course Recommendations",
+      "success": false,
+      "error": "400 Unsupported parameter: '' is not supported with this model. Use 'max_completion_tokens' instead.",
+      "callNumber": null,
+      "prompt": "You are an AI course recommendation expert.\nAnalyze the user's learning profile and suggest the best courses.\n\nUser's Enrolled Courses:\nComplete Python Programming - Updated (Category: Web Development, Skills: Python, Django, Flask, REST APIs, Rating: 4/5)\n\nRecent Search Queries: python6; python5; python4\n\nAvailable Courses:\nID: 690509ef851b784765d8bf82, Name: Complete Web Development Bootcamp 2024, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\nID: 69050a15851b784765d8bfa0, Name: Complete Web Development Bootcamp 2024, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\nID: 69050afe851b784765d8bfd1, Name: Complete Web Development Bootcamp 2025, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\n\nInstructions:\n1. Recommend up to 15 relevant courses.\n2. Prioritize high ratings and relevant skills.\n3. Output only JSON array of course IDs, no text.\n4. Format: [\"courseId1\", \"courseId2\", ...]"
+    },
+    {
+      "timestamp": "2025-11-03T19:58:37.535Z",
+      "endpoint": "ChatGPT Course Recommendations",
+      "success": false,
+      "error": "400 Unsupported value: 'temperature' does not support 0.7 with this model. Only the default (1) value is supported.",
+      "callNumber": null,
+      "prompt": "You are an AI course recommendation expert.\nAnalyze the user's learning profile and suggest the best courses.\n\nUser's Enrolled Courses:\nComplete Python Programming - Updated (Category: Web Development, Skills: Python, Django, Flask, REST APIs, Rating: 4/5)\n\nRecent Search Queries: python6; python5; python4\n\nAvailable Courses:\nID: 690509ef851b784765d8bf82, Name: Complete Web Development Bootcamp 2024, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\nID: 69050a15851b784765d8bfa0, Name: Complete Web Development Bootcamp 2024, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\nID: 69050afe851b784765d8bfd1, Name: Complete Web Development Bootcamp 2025, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\n\nInstructions:\n1. Recommend up to 15 relevant courses.\n2. Prioritize high ratings and relevant skills.\n3. Output only JSON array of course IDs, no text.\n4. Format: [\"courseId1\", \"courseId2\", ...]"
+    },
+    {
+      "timestamp": "2025-11-03T19:59:26.186Z",
+      "endpoint": "ChatGPT Course Recommendations",
+      "success": true,
+      "error": null,
+      "callNumber": 1,
       "prompt": "You are an AI course recommendation expert.\nAnalyze the user's learning profile and suggest the best courses.\n\nUser's Enrolled Courses:\nComplete Python Programming - Updated (Category: Web Development, Skills: Python, Django, Flask, REST APIs, Rating: 4/5)\n\nRecent Search Queries: python6; python5; python4\n\nAvailable Courses:\nID: 690509ef851b784765d8bf82, Name: Complete Web Development Bootcamp 2024, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\nID: 69050a15851b784765d8bfa0, Name: Complete Web Development Bootcamp 2024, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\nID: 69050afe851b784765d8bfd1, Name: Complete Web Development Bootcamp 2025, Category: Web Development, Rating: 0/5 (0 ratings), Skills: HTML5, CSS3, JavaScript, React.js, Node.js, Express.js, MongoDB, RESTful APIs, Git & GitHub, Tools: JavaScript, React, Node.js, MongoDB, Git, Price: $999\n\nInstructions:\n1. Recommend up to 15 relevant courses.\n2. Prioritize high ratings and relevant skills.\n3. Output only JSON array of course IDs, no text.\n4. Format: [\"courseId1\", \"courseId2\", ...]"
     }
   ],

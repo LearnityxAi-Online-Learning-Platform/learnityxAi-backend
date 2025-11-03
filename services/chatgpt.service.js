@@ -113,8 +113,8 @@ Instructions:
           content: prompt,
         },
       ],
-      temperature: 0.7,
-      max_tokens: 300,
+      temperature: 1,
+      max_completion_tokens: 300,
     });
 
     // Log successful API call
