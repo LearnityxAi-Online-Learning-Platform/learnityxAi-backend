@@ -45,10 +45,10 @@ const getRecommendations = async (req, res) => {
       .select("courseName courseCategory skills tools rating")
       .lean();
 
-    // Fetch user's recent search history (last 30 searches)
+    // Fetch user's recent search history (last 15 searches)
     const searchHistory = await SearchHistory.find({ userId })
       .sort({ createdAt: -1 })
-      .limit(30)
+      .limit(15)
       .select("searchQuery filters")
       .lean();
 
@@ -96,7 +96,7 @@ const getRecommendations = async (req, res) => {
       enrolledStudents: { $ne: userId },
     })
       .select(
-        "courseName courseCategory description skills tools price rating totalRatings instructorName startingDate duration courseFlyerURL"
+        "courseName courseCategory description skills tools price rating totalRatings instructorName startingDate duration courseFlyerURL numberOfUserEnrolled"
       )
       .sort({ rating: -1, totalRatings: -1 })
       .lean();

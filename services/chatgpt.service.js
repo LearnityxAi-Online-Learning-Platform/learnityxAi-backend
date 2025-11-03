@@ -52,15 +52,39 @@ const generateCourseRecommendations = async (
             .join("; ")
         : "None";
 
-    // Build search queries text
+    // Build search queries text with all filter details
     const searchQueriesText =
       searchHistory.length > 0
         ? searchHistory
             .map((search) => {
               let query = search.searchQuery;
-              if (search.filters && search.filters.category) {
-                query += ` [Category: ${search.filters.category}]`;
+              const filters = [];
+
+              if (search.filters) {
+                if (search.filters.category) {
+                  filters.push(`Category: ${search.filters.category}`);
+                }
+                if (search.filters.skills && search.filters.skills.length > 0) {
+                  filters.push(`Skills: ${search.filters.skills.join(", ")}`);
+                }
+                if (search.filters.tools && search.filters.tools.length > 0) {
+                  filters.push(`Tools: ${search.filters.tools.join(", ")}`);
+                }
+                if (search.filters.minPrice !== undefined || search.filters.maxPrice !== undefined) {
+                  const priceRange = [];
+                  if (search.filters.minPrice !== undefined) priceRange.push(`Min: $${search.filters.minPrice}`);
+                  if (search.filters.maxPrice !== undefined) priceRange.push(`Max: $${search.filters.maxPrice}`);
+                  filters.push(`Price: ${priceRange.join(", ")}`);
+                }
+                if (search.filters.minRating !== undefined) {
+                  filters.push(`MinRating: ${search.filters.minRating}/5`);
+                }
               }
+
+              if (filters.length > 0) {
+                query += ` [${filters.join(", ")}]`;
+              }
+
               return query;
             })
             .join("; ")
