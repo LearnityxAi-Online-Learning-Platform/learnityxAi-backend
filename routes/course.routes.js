@@ -12,6 +12,7 @@ const {
   searchCourses,
   enrollInCourse,
   getEnrolledCourses,
+  getInstructorDashboard,
 } = require("../controllers/course.controller");
 
 const { authenticateUser } = require("../middleware/auth.middleware");
@@ -45,6 +46,14 @@ router.get("/durations", getDurationsList);
 router.get("/:id", getCourseById);
 
 // Protected route list that can only access to instructors
+
+// Get instructor dashboard statistics
+router.get(
+  "/instructor/dashboard",
+  authenticateUser,
+  authorizeRoles("instructor"),
+  getInstructorDashboard
+);
 
 // Get courses for particular instructor
 router.get(

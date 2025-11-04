@@ -670,6 +670,141 @@ const getEnrolledCourses = async (req, res) => {
   }
 };
 
+// Get instructor dashboard statistics
+const getInstructorDashboard = async (req, res) => {
+  try {
+    const instructorId = req.user._id;
+
+    // Get instructor details
+    const instructor = await User.findById(instructorId).select(
+      "firstName lastName email"
+    );
+
+    // Get instructor's courses only
+    const instructorCourses = await Course.find({
+      instructorId,
+      isActive: true,
+    }).lean();
+
+    const totalCourses = instructorCourses.length;
+
+    // Calculate total students enrolled in instructor's courses
+    let totalStudentsEnrolled = 0;
+    let courseStatistics = [];
+
+    for (const course of instructorCourses) {
+      const enrolledCount = course.enrolledStudents
+        ? course.enrolledStudents.length
+        : 0;
+      totalStudentsEnrolled += enrolledCount;
+
+      courseStatistics.push({
+        courseId: course._id,
+        courseName: course.courseName,
+        courseCategory: course.courseCategory,
+        enrolledStudents: enrolledCount,
+        rating: course.rating,
+        totalRatings: course.totalRatings,
+        price: course.price,
+        startingDate: course.startingDate,
+        duration: course.duration,
+      });
+    }
+
+    // Sort courses by enrolled students (most popular first)
+    courseStatistics.sort((a, b) => b.enrolledStudents - a.enrolledStudents);
+
+    // Get most popular course
+    const mostPopularCourse =
+      courseStatistics.length > 0 ? courseStatistics[0] : null;
+
+    // Get highest rated course
+    const highestRatedCourse = instructorCourses
+      .filter((c) => c.rating > 0)
+      .sort((a, b) => b.rating - a.rating)[0];
+
+    // Calculate average rating across all instructor courses
+    const coursesWithRatings = instructorCourses.filter((c) => c.rating > 0);
+    const averageRating =
+      coursesWithRatings.length > 0
+        ? (
+            coursesWithRatings.reduce((sum, c) => sum + c.rating, 0) /
+            coursesWithRatings.length
+          ).toFixed(2)
+        : 0;
+
+    // Calculate total revenue (estimated based on enrollments)
+    const totalRevenue = instructorCourses.reduce((sum, course) => {
+      const enrolledCount = course.enrolledStudents
+        ? course.enrolledStudents.length
+        : 0;
+      return sum + course.price * enrolledCount;
+    }, 0);
+
+    // Get courses by category
+    const coursesByCategory = instructorCourses.reduce((acc, course) => {
+      const category = course.courseCategory;
+      if (!acc[category]) {
+        acc[category] = {
+          count: 0,
+          totalEnrolled: 0,
+        };
+      }
+      acc[category].count += 1;
+      acc[category].totalEnrolled += course.enrolledStudents
+        ? course.enrolledStudents.length
+        : 0;
+      return acc;
+    }, {});
+
+    const dashboardData = {
+      instructor: {
+        name: `${instructor.firstName} ${instructor.lastName}`,
+        email: instructor.email,
+      },
+      overview: {
+        totalCourses,
+        totalStudents: totalStudentsEnrolled,
+        averageRating: parseFloat(averageRating),
+        totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+      },
+      topCourses: {
+        mostPopular: mostPopularCourse
+          ? {
+              courseId: mostPopularCourse.courseId,
+              courseName: mostPopularCourse.courseName,
+              enrolledStudents: mostPopularCourse.enrolledStudents,
+            }
+          : null,
+        highestRated: highestRatedCourse
+          ? {
+              courseId: highestRatedCourse._id,
+              courseName: highestRatedCourse.courseName,
+              rating: highestRatedCourse.rating,
+              totalRatings: highestRatedCourse.totalRatings,
+            }
+          : null,
+      },
+      coursesByCategory,
+      allCourses: courseStatistics,
+    };
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "Instructor dashboard data retrieved successfully",
+      dashboardData
+    );
+  } catch (error) {
+    console.error("Get instructor dashboard error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Server error while retrieving dashboard data"
+    );
+  }
+};
+
 module.exports = {
   createCourse,
   getAllCourses,
@@ -683,4 +818,5 @@ module.exports = {
   searchCourses,
   enrollInCourse,
   getEnrolledCourses,
+  getInstructorDashboard,
 };
