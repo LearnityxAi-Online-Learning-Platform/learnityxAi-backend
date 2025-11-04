@@ -6,6 +6,8 @@ const {
   getCourseById,
   updateCourse,
   deleteCourse,
+  deactivateCourse,
+  reactivateCourse,
   getCourseCategories,
   getToolsList,
   getDurationsList,
@@ -87,6 +89,22 @@ router.delete(
   authenticateUser,
   authorizeRoles("instructor"),
   deleteCourse
+);
+
+// deactivate course (mark as inactive)
+router.patch(
+  "/:id/deactivate",
+  authenticateUser,
+  authorizeRoles("instructor"),
+  deactivateCourse
+);
+
+// reactivate course (mark as active)
+router.patch(
+  "/:id/reactivate",
+  authenticateUser,
+  authorizeRoles("instructor"),
+  reactivateCourse
 );
 
 // Protected routes for students
