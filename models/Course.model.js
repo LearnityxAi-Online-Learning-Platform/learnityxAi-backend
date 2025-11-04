@@ -102,11 +102,23 @@ const courseSchema = new mongoose.Schema(
       required: [true, "Course description is required"],
       maxlength: [2000, "Description cannot exceed 2000 characters"],
     },
+    whatYouWillLearn: [
+      {
+        type: String,
+        trim: true,
+        maxlength: [200, "Each learning outcome cannot exceed 200 characters"],
+      },
+    ],
     rating: {
       type: Number,
       default: 0,
       min: [0, "Rating cannot be less than 0"],
       max: [5, "Rating cannot be more than 5"],
+    },
+    totalRatings: {
+      type: Number,
+      default: 0,
+      min: [0, "Total ratings cannot be negative"],
     },
     numberOfUserEnrolled: {
       type: Number,
@@ -166,7 +178,7 @@ const courseSchema = new mongoose.Schema(
   }
 );
 
-// index the serchparams
+// index the search params
 courseSchema.index({ courseName: "text", description: "text" });
 courseSchema.index({ courseCategory: 1 });
 courseSchema.index({ instructorId: 1 });
@@ -175,14 +187,14 @@ courseSchema.index({ tools: 1 });
 courseSchema.index({ price: 1 });
 courseSchema.index({ rating: -1 });
 
-// enrolement count
+// enrollment count
 courseSchema.virtual("enrolledCount").get(function () {
-    return this.enrolledStudents.length;
+  return this.enrolledStudents.length;
 });
 
-// get catogoris list
+// get categories list
 courseSchema.statics.getCategories = function () {
-    return COURSE_CATEGORIES;
+  return COURSE_CATEGORIES;
 };
 
 // get tools list
@@ -190,7 +202,7 @@ courseSchema.statics.getTools = function () {
   return TOOLS;
 };
 
-// get couse durationlist
+// get course duration list
 courseSchema.statics.getDurations = function () {
   return DURATIONS;
 };

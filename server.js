@@ -1,6 +1,4 @@
 const dotenv = require("dotenv");
-
-// Load environment variables FIRST before any other imports
 dotenv.config();
 
 const express = require("express");
@@ -9,10 +7,20 @@ const connectDatabase = require("./config/database");
 const authRoutes = require("./routes/auth.routes");
 const courseRoutes = require("./routes/course.routes");
 const uploadRoutes = require("./routes/upload.routes");
+const recommendationRoutes = require("./routes/recommendation.routes");
+const ratingRoutes = require("./routes/rating.routes");
+const health = require("./routes/health.routes");
+
 const {
   notFoundHandler,
   errorHandler,
 } = require("./middleware/errorHandler.middleware");
+
+// Initialize API usage tracking
+const {
+  initializeUsageTracking,
+  getUsageSummary,
+} = require("./utils/apiUsageTracker");
 
 const app = express();
 
@@ -30,6 +38,10 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Initialize API tracking system
+initializeUsageTracking();
+
+// Connect to database
 connectDatabase();
 
 app.get("/", (req, res) => {
@@ -40,10 +52,14 @@ app.get("/", (req, res) => {
   });
 });
 
-// base rotes
+
+// Base routes
 app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/recommendations", recommendationRoutes);
+app.use("/api/ratings", ratingRoutes);
+app.use("/api/health", health);
 
 // Error handling middleware
 app.use(notFoundHandler);
@@ -53,4 +69,12 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`learnityxAi Server is running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+
+  // Log initial API usage stats to console alwys
+  const apiUsage = getUsageSummary();
+  console.log(
+    `ChatGPT API Usage: ${apiUsage.totalCalls}/${apiUsage.maxCalls} calls used (${apiUsage.percentageUsed})`
+  );
+  console.log(`Remaining API calls: ${apiUsage.remainingCalls}`);
 });

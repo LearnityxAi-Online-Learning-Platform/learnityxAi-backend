@@ -1,0 +1,97 @@
+// Rate Limiting Middleware for Recommendation Endpoint
+// Prevents rapid consecutive requests (1 request per 30 seconds per user)
+
+const {
+  sendErrorResponse,
+} = require("../utils/responseHandler");
+
+// Store for tracking last request time per user
+const userLastRequestTime = new Map();
+
+// Minimum time between requests in milliseconds (30 seconds)
+const MIN_REQUEST_INTERVAL = 30 * 1000;
+
+/**
+ * Middleware to throttle recommendation requests
+ * Ensures users can only make 1 request per 30 seconds
+ */
+const throttleRecommendationRequests = (req, res, next) => {
+  try {
+    const userId = req.user._id.toString();
+    const now = Date.now();
+
+    // Check if user has made a recent request
+    if (userLastRequestTime.has(userId)) {
+      const lastRequestTime = userLastRequestTime.get(userId);
+      const timeSinceLastRequest = now - lastRequestTime;
+
+      // If less than 30 seconds since last request, reject
+      if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+        const waitTimeSeconds = Math.ceil(
+          (MIN_REQUEST_INTERVAL - timeSinceLastRequest) / 1000
+        );
+
+        console.warn(
+          `[Rate Limit] User ${userId} exceeded rate limit. Must wait ${waitTimeSeconds}s`
+        );
+
+        return sendErrorResponse(
+          res,
+          429,
+          `Please wait ${waitTimeSeconds} seconds before requesting recommendations again.`,
+          {
+            retryAfter: waitTimeSeconds,
+            type: "RATE_LIMIT_EXCEEDED",
+          }
+        );
+      }
+    }
+
+    // Update last request time
+    userLastRequestTime.set(userId, now);
+
+    // Clean up old entries (older than 5 minutes)
+    const CLEANUP_THRESHOLD = 5 * 60 * 1000;
+    for (const [key, value] of userLastRequestTime.entries()) {
+      if (now - value > CLEANUP_THRESHOLD) {
+        userLastRequestTime.delete(key);
+      }
+    }
+
+    next();
+  } catch (error) {
+    console.error("Error in throttle middleware:", error);
+    // On error, allow request to proceed (fail open for better UX)
+    next();
+  }
+};
+
+/**
+ * Clear rate limit for a specific user (useful for testing)
+ */
+const clearUserRateLimit = (userId) => {
+  userLastRequestTime.delete(userId.toString());
+};
+
+/**
+ * Get remaining wait time for a user
+ */
+const getRemainingWaitTime = (userId) => {
+  const now = Date.now();
+  if (!userLastRequestTime.has(userId.toString())) {
+    return 0;
+  }
+
+  const lastRequestTime = userLastRequestTime.get(userId.toString());
+  const timeSinceLastRequest = now - lastRequestTime;
+  const remainingTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+
+  return remainingTime > 0 ? Math.ceil(remainingTime / 1000) : 0;
+};
+
+module.exports = {
+  throttleRecommendationRequests,
+  clearUserRateLimit,
+  getRemainingWaitTime,
+  MIN_REQUEST_INTERVAL,
+};

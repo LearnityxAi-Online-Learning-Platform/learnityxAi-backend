@@ -5,7 +5,7 @@ const {
   uploadMultipleFields,
   deleteFileFromCloud,
 } = require("../controllers/upload.controller");
-const { authenticateUser } = require("../middleware/auth.middleware");
+
 const {
   uploadSingle,
   uploadMultiple,

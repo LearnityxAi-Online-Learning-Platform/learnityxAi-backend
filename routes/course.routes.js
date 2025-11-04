@@ -12,9 +12,11 @@ const {
   searchCourses,
   enrollInCourse,
   getEnrolledCourses,
+  getInstructorDashboard,
 } = require("../controllers/course.controller");
 
 const { authenticateUser } = require("../middleware/auth.middleware");
+const { optionalAuth } = require("../middleware/optionalAuth.middleware");
 const { authorizeRoles } = require("../middleware/role.middleware");
 const {
   createCourseValidation,
@@ -23,15 +25,15 @@ const {
 
 const router = express.Router();
 
-// Course related public rouets
+// Course related public routes
 
-// get all courses
-router.get("/", getAllCourses);
+// get all courses (with optional authentication for search history)
+router.get("/", optionalAuth, getAllCourses);
 
-// search courses
-router.get("/search", searchCourses);
+// search courses (with optional authentication for search history)
+router.get("/search", optionalAuth, searchCourses);
 
-// get cours categories
+// get course categories
 router.get("/categories", getCourseCategories);
 
 // get tool lists
@@ -40,10 +42,18 @@ router.get("/tools", getToolsList);
 // get course duration lists
 router.get("/durations", getDurationsList);
 
-// get couse by ID
+// get course by ID
 router.get("/:id", getCourseById);
 
-// protected route list that can only acess to instructors
+// Protected route list that can only access to instructors
+
+// Get instructor dashboard statistics
+router.get(
+  "/instructor/dashboard",
+  authenticateUser,
+  authorizeRoles("instructor"),
+  getInstructorDashboard
+);
 
 // Get courses for particular instructor
 router.get(
@@ -53,7 +63,7 @@ router.get(
   getInstructorCourses
 );
 
-// create new cpurse
+// create new course
 router.post(
   "/",
   authenticateUser,
@@ -81,7 +91,7 @@ router.delete(
 
 // Protected routes for students
 
-// get enroles courses for studetns
+// get enrolled courses for students
 router.get(
   "/student/enrolled",
   authenticateUser,
@@ -89,7 +99,7 @@ router.get(
   getEnrolledCourses
 );
 
-// student enrole to a course
+// student enroll to a course
 router.post(
   "/:id/enroll",
   authenticateUser,

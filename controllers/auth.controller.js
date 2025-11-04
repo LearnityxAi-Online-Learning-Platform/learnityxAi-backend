@@ -1,6 +1,9 @@
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
 const User = require("../models/User.model");
+const Course = require("../models/Course.model");
+const CourseRating = require("../models/CourseRating.model");
+const SearchHistory = require("../models/SearchHistory.model");
 const OTP = require("../models/OTP.model");
 const {
   sendSuccessResponse,
@@ -191,18 +194,24 @@ const logout = async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
-    if (refreshToken) {
-      const user = await User.findById(req.user._id);
-      await user.removeRefreshToken(refreshToken);
+    if (!refreshToken) {
+      return sendErrorResponse(res, 400, "Refresh token is required");
     }
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return sendErrorResponse(res, 404, "User not found");
+    }
+
+    await user.removeRefreshToken(refreshToken);
 
     return sendSuccessResponse(res, 200, "Logged out successfully");
   } catch (error) {
     console.error("Logout error:", error);
-    return sendErrorResponse(res, 500, "Interval Server error fail to logout");
+    return sendErrorResponse(res, 500, "Internal Server error. Failed to logout");
   }
 };
-
 
 // handle Forgot password
 const forgotPassword = async (req, res) => {
@@ -426,6 +435,73 @@ const changePassword = async (req, res) => {
   }
 };
 
+// Delete user account
+const deleteAccount = async (req, res) => {
+  try {
+    const { password } = req.body;
+    const userId = req.user._id;
+
+    if (!password) {
+      return sendErrorResponse(
+        res,
+        400,
+        "Password is required to delete account"
+      );
+    }
+
+    // Verify user password
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+      return sendErrorResponse(res, 404, "User not found");
+    }
+
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
+      return sendErrorResponse(
+        res,
+        401,
+        "Incorrect password. Account deletion failed."
+      );
+    }
+
+    // Delete user's data based on role
+    if (user.role === "instructor") {
+      // Soft delete instructor's courses
+      await Course.updateMany(
+        { instructorId: userId },
+        { $set: { isActive: false } }
+      );
+    } else if (user.role === "student") {
+      // Remove student from enrolled courses
+      await Course.updateMany(
+        { enrolledStudents: userId },
+        { $pull: { enrolledStudents: userId } }
+      );
+    }
+
+    // Delete user's ratings
+    await CourseRating.deleteMany({ userId });
+
+    // Delete user's search history
+    await SearchHistory.deleteMany({ userId });
+
+    // Delete user's OTP records
+    await OTP.deleteMany({ email: user.email });
+
+    // Delete user account
+    await User.findByIdAndDelete(userId);
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "Account deleted successfully. We're sorry to see you go."
+    );
+  } catch (error) {
+    console.error("Delete account error:", error);
+    return sendErrorResponse(res, 500, "Server error while deleting account");
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -437,4 +513,5 @@ module.exports = {
   getProfile,
   updateProfile,
   changePassword,
+  deleteAccount,
 };
