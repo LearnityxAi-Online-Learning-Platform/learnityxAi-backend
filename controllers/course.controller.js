@@ -354,6 +354,19 @@ const deleteCourse = async (req, res) => {
       );
     }
 
+    // Check if course has 10 or more enrolled students
+    const enrolledStudentsCount = course.enrolledStudents
+      ? course.enrolledStudents.length
+      : 0;
+
+    if (enrolledStudentsCount >= 10) {
+      return sendErrorResponse(
+        res,
+        400,
+        `Cannot delete course with ${enrolledStudentsCount} enrolled students. Courses with 10 or more enrolled students cannot be deleted.`
+      );
+    }
+
     // Soft delete using isActive=false
     course.isActive = false;
     await course.save();
