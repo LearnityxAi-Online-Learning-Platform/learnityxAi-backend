@@ -102,6 +102,13 @@ const courseSchema = new mongoose.Schema(
       required: [true, "Course description is required"],
       maxlength: [2000, "Description cannot exceed 2000 characters"],
     },
+    whatYouWillLearn: [
+      {
+        type: String,
+        trim: true,
+        maxlength: [200, "Each learning outcome cannot exceed 200 characters"],
+      },
+    ],
     rating: {
       type: Number,
       default: 0,

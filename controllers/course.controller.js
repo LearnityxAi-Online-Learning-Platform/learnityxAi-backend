@@ -19,6 +19,7 @@ const createCourse = async (req, res) => {
       courseName,
       courseCategory,
       description,
+      whatYouWillLearn,
       skills,
       tools,
       startingDate,
@@ -41,6 +42,7 @@ const createCourse = async (req, res) => {
       instructorId: req.user._id,
       instructorName,
       description,
+      whatYouWillLearn: whatYouWillLearn || [],
       skills,
       tools: tools || [],
       startingDate,
@@ -298,6 +300,7 @@ const updateCourse = async (req, res) => {
       courseName,
       courseCategory,
       description,
+      whatYouWillLearn,
       skills,
       tools,
       startingDate,
@@ -311,6 +314,7 @@ const updateCourse = async (req, res) => {
     if (courseName) course.courseName = courseName;
     if (courseCategory) course.courseCategory = courseCategory;
     if (description) course.description = description;
+    if (whatYouWillLearn !== undefined) course.whatYouWillLearn = whatYouWillLearn;
     if (skills) course.skills = skills;
     if (tools !== undefined) course.tools = tools;
     if (startingDate) course.startingDate = startingDate;

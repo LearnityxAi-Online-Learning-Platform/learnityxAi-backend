@@ -96,7 +96,7 @@ const getRecommendations = async (req, res) => {
       enrolledStudents: { $ne: userId },
     })
       .select(
-        "courseName courseCategory description skills tools price rating totalRatings instructorName startingDate duration courseFlyerURL numberOfUserEnrolled"
+        "courseName courseCategory description whatYouWillLearn skills tools price rating totalRatings instructorName startingDate duration courseFlyerURL numberOfUserEnrolled"
       )
       .sort({ rating: -1, totalRatings: -1 })
       .lean();
