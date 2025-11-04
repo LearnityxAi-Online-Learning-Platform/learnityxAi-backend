@@ -133,6 +133,20 @@ const changePasswordValidation = [
     .withMessage("New password must be at least 6 characters long"),
 ];
 
+const ratingValidation = [
+  body("rating")
+    .notEmpty()
+    .withMessage("Rating is required")
+    .isInt({ min: 1, max: 5 })
+    .withMessage("Rating must be a number between 1 and 5"),
+
+  body("comment")
+    .optional()
+    .isLength({ max: 500 })
+    .withMessage("Comment cannot exceed 500 characters")
+    .trim(),
+];
+
 module.exports = {
   registerValidation,
   loginValidation,
@@ -141,4 +155,5 @@ module.exports = {
   resetPasswordValidation,
   updateProfileValidation,
   changePasswordValidation,
+  ratingValidation,
 };

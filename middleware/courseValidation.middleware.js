@@ -21,6 +21,28 @@ const createCourseValidation = [
     .isLength({ max: 2000 })
     .withMessage("Description cannot exceed 2000 characters"),
 
+  body("whatYouWillLearn")
+    .optional()
+    .isArray()
+    .withMessage("What you will learn must be an array")
+    .custom((items) => {
+      if (items && items.length > 0) {
+        if (
+          !items.every(
+            (item) => typeof item === "string" && item.trim().length > 0
+          )
+        ) {
+          throw new Error("All learning outcomes must be non-empty strings");
+        }
+        if (items.some((item) => item.length > 200)) {
+          throw new Error(
+            "Each learning outcome cannot exceed 200 characters"
+          );
+        }
+      }
+      return true;
+    }),
+
   body("skills")
     .isArray({ min: 1 })
     .withMessage("At least one skill is required")
@@ -88,6 +110,28 @@ const updateCourseValidation = [
     .withMessage("Course description cannot be empty")
     .isLength({ max: 2000 })
     .withMessage("Description cannot exceed 2000 characters"),
+
+  body("whatYouWillLearn")
+    .optional()
+    .isArray()
+    .withMessage("What you will learn must be an array")
+    .custom((items) => {
+      if (items && items.length > 0) {
+        if (
+          !items.every(
+            (item) => typeof item === "string" && item.trim().length > 0
+          )
+        ) {
+          throw new Error("All learning outcomes must be non-empty strings");
+        }
+        if (items.some((item) => item.length > 200)) {
+          throw new Error(
+            "Each learning outcome cannot exceed 200 characters"
+          );
+        }
+      }
+      return true;
+    }),
 
   body("skills")
     .optional()

@@ -10,6 +10,7 @@ const {
   getProfile,
   updateProfile,
   changePassword,
+  deleteAccount,
 } = require("../controllers/auth.controller");
 const { authenticateUser } = require("../middleware/auth.middleware");
 const {
@@ -20,7 +21,7 @@ const {
   resetPasswordValidation,
   updateProfileValidation,
   changePasswordValidation,
-} = require("../middleware/validation.middleware");
+} = require("../middleware/authValidation.middleware");
 
 const router = express.Router();
 
@@ -53,5 +54,8 @@ router.post(
   changePasswordValidation,
   changePassword
 );
+
+// Delete user account
+router.delete("/delete-account", authenticateUser, deleteAccount);
 
 module.exports = router;

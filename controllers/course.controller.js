@@ -1,6 +1,7 @@
 const { validationResult } = require("express-validator");
 const Course = require("../models/Course.model");
 const User = require("../models/User.model");
+const SearchHistory = require("../models/SearchHistory.model");
 const {
   sendSuccessResponse,
   sendErrorResponse,
@@ -18,6 +19,7 @@ const createCourse = async (req, res) => {
       courseName,
       courseCategory,
       description,
+      whatYouWillLearn,
       skills,
       tools,
       startingDate,
@@ -40,6 +42,7 @@ const createCourse = async (req, res) => {
       instructorId: req.user._id,
       instructorName,
       description,
+      whatYouWillLearn: whatYouWillLearn || [],
       skills,
       tools: tools || [],
       startingDate,
@@ -74,7 +77,56 @@ const getAllCourses = async (req, res) => {
       sortOrder = "desc",
     } = req.query;
 
-    // Build Serch query
+    // Save search history for authenticated users
+    if (req.user && search) {
+      try {
+        // Check current search history count for this user
+        const searchCount = await SearchHistory.countDocuments({
+          userId: req.user._id,
+        });
+
+        console.log(`[SearchHistory - getAllCourses] User ${req.user._id} has ${searchCount} searches`);
+
+        // If user has 15 or more searches, delete the oldest ones
+        const MAX_SEARCH_HISTORY = 3; // TODO: Change back to 15 for production
+        if (searchCount >= MAX_SEARCH_HISTORY) {
+          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1), so we can add 1 new
+          console.log(`[SearchHistory - getAllCourses] Need to delete ${excessCount} old searches`);
+
+          const oldestSearches = await SearchHistory.find({
+            userId: req.user._id,
+          })
+            .sort({ createdAt: 1 })
+            .limit(excessCount)
+            .select("_id");
+
+          const idsToDelete = oldestSearches.map((search) => search._id);
+          console.log(`[SearchHistory - getAllCourses] Deleting IDs:`, idsToDelete);
+
+          const deleteResult = await SearchHistory.deleteMany({ _id: { $in: idsToDelete } });
+          console.log(`[SearchHistory - getAllCourses] Deleted ${deleteResult.deletedCount} searches`);
+        }
+
+        // Create new search history entry
+        await SearchHistory.create({
+          userId: req.user._id,
+          searchQuery: search,
+          searchType: "course_search",
+          filters: {
+            category: category || undefined,
+            skills: skills ? skills.split(",").map((s) => s.trim()) : undefined,
+            tools: tools ? tools.split(",").map((t) => t.trim()) : undefined,
+            minPrice: minPrice ? Number(minPrice) : undefined,
+            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+          },
+        });
+        console.log(`[SearchHistory - getAllCourses] Created new search entry for query: "${search}"`);
+      } catch (searchError) {
+        console.error("Error saving search history:", searchError);
+      }
+    }
+
+    // Build Search query
     let query = { isActive: true };
     if (search) {
       query.$or = [
@@ -88,13 +140,13 @@ const getAllCourses = async (req, res) => {
       query.courseCategory = category;
     }
 
-    // filter byt skills
+    // filter by skills
     if (skills) {
       const skillsArray = skills.split(",").map((s) => s.trim());
       query.skills = { $in: skillsArray };
     }
 
-    // folter by tools
+    // filter by tools
     if (tools) {
       const toolsArray = tools.split(",").map((t) => t.trim());
       query.tools = { $in: toolsArray };
@@ -117,43 +169,39 @@ const getAllCourses = async (req, res) => {
     const pageSize = Math.min(50, Math.max(1, parseInt(size)));
     const skip = (pageNum - 1) * pageSize;
 
-    // sort the result to ascending order
+    // sort the result
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === "asc" ? 1 : -1;
 
     // query the DB
     const courses = await Course.find(query)
-      .sort()
-      .skip()
-      .limit()
-      .select("enrolledStudents")
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(pageSize)
+      .select("-enrolledStudents")
       .lean();
 
     const totalCourses = await Course.countDocuments(query);
     const totalPages = Math.ceil(totalCourses / pageSize);
 
-     return sendSuccessResponse(res, 200, "Courses retrieved successfully", {
-       courses,
-       pagination: {
-         currentPage: pageNum,
-         pageSize: pageSize,
-         totalCourses,
-         totalPages,
-         hasNextPage: pageNum < totalPages,
-         hasPrevPage: pageNum > 1,
-       },
-     });
-
-
+    return sendSuccessResponse(res, 200, "Courses retrieved successfully", {
+      courses,
+      pagination: {
+        currentPage: pageNum,
+        pageSize: pageSize,
+        totalCourses,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+      },
+    });
   } catch (error) {
     console.error("Get all courses error:", error);
     return sendErrorResponse(res, 500, "Server error while fetching courses");
   }
 };
 
-
 // get courses for instrutor
-
 const getInstructorCourses = async (req, res) => {
   try {
     const { page = 1, size = 10 } = req.query;
@@ -200,7 +248,7 @@ const getInstructorCourses = async (req, res) => {
   }
 };
 
-// get course by ID 
+// get course by ID
 const getCourseById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -252,6 +300,7 @@ const updateCourse = async (req, res) => {
       courseName,
       courseCategory,
       description,
+      whatYouWillLearn,
       skills,
       tools,
       startingDate,
@@ -265,6 +314,7 @@ const updateCourse = async (req, res) => {
     if (courseName) course.courseName = courseName;
     if (courseCategory) course.courseCategory = courseCategory;
     if (description) course.description = description;
+    if (whatYouWillLearn !== undefined) course.whatYouWillLearn = whatYouWillLearn;
     if (skills) course.skills = skills;
     if (tools !== undefined) course.tools = tools;
     if (startingDate) course.startingDate = startingDate;
@@ -304,7 +354,7 @@ const deleteCourse = async (req, res) => {
       );
     }
 
-    // Soft delete using isAciv=false
+    // Soft delete using isActive=false
     course.isActive = false;
     await course.save();
 
@@ -318,7 +368,7 @@ const deleteCourse = async (req, res) => {
   }
 };
 
-// get course cat1gories
+// get course categories
 const getCourseCategories = async (req, res) => {
   try {
     const categories = Course.getCategories();
@@ -355,7 +405,7 @@ const getToolsList = async (req, res) => {
   }
 };
 
-// get dureation list
+// get duration list
 const getDurationsList = async (req, res) => {
   try {
     const durations = Course.getDurations();
@@ -389,6 +439,54 @@ const searchCourses = async (req, res) => {
 
     if (!search) {
       return sendErrorResponse(res, 400, "Search query is required");
+    }
+
+    // Save search history for authenticated users
+    if (req.user) {
+      try {
+        // Check current search history count for this user
+        const searchCount = await SearchHistory.countDocuments({
+          userId: req.user._id,
+        });
+
+        console.log(`[SearchHistory] User ${req.user._id} has ${searchCount} searches`);
+
+        // If user has 10 or more searches, delete the oldest ones
+        const MAX_SEARCH_HISTORY = 10;
+        if (searchCount >= MAX_SEARCH_HISTORY) {
+          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1), so we can add 1 new
+          // console.log(`[SearchHistory] Need to delete ${excessCount} old searches`);
+
+          const oldestSearches = await SearchHistory.find({
+            userId: req.user._id,
+          })
+            .sort({ createdAt: 1 })
+            .limit(excessCount)
+            .select("_id");
+
+          const idsToDelete = oldestSearches.map((search) => search._id);
+          // console.log(`[SearchHistory] Deleting IDs:`, idsToDelete);
+
+          const deleteResult = await SearchHistory.deleteMany({ _id: { $in: idsToDelete } });
+          // console.log(`[SearchHistory] Deleted ${deleteResult.deletedCount} searches`);
+        }
+
+        // Create new search history entry
+        await SearchHistory.create({
+          userId: req.user._id,
+          searchQuery: search,
+          searchType: "course_search",
+          filters: {
+            category: category || undefined,
+            minPrice: minPrice ? Number(minPrice) : undefined,
+            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+            minRating: minRating ? Number(minRating) : undefined,
+          },
+        });
+        console.log(`[SearchHistory] Created new search entry for query: "${search}"`);
+      } catch (searchError) {
+        console.error("Error saving search history:", searchError);
+      }
     }
 
     // Build search query
@@ -447,10 +545,13 @@ const searchCourses = async (req, res) => {
     });
   } catch (error) {
     console.error("Search courses error:", error);
-    return sendErrorResponse(res, 500, "Internal Server error fail to searching courses");
+    return sendErrorResponse(
+      res,
+      500,
+      "Internal Server error fail to searching courses"
+    );
   }
 };
-
 
 // student enrole to course
 const enrollInCourse = async (req, res) => {
@@ -569,6 +670,140 @@ const getEnrolledCourses = async (req, res) => {
   }
 };
 
+// Get instructor dashboard statistics
+const getInstructorDashboard = async (req, res) => {
+  try {
+    const instructorId = req.user._id;
+
+    // Get instructor details
+    const instructor = await User.findById(instructorId).select(
+      "firstName lastName email"
+    );
+
+    // Get instructor's courses only
+    const instructorCourses = await Course.find({
+      instructorId,
+      isActive: true,
+    }).lean();
+
+    const totalCourses = instructorCourses.length;
+
+    // Calculate total students enrolled in instructor's courses
+    let totalStudentsEnrolled = 0;
+    let courseStatistics = [];
+
+    for (const course of instructorCourses) {
+      const enrolledCount = course.enrolledStudents
+        ? course.enrolledStudents.length
+        : 0;
+      totalStudentsEnrolled += enrolledCount;
+
+      courseStatistics.push({
+        courseId: course._id,
+        courseName: course.courseName,
+        courseCategory: course.courseCategory,
+        enrolledStudents: enrolledCount,
+        rating: course.rating,
+        totalRatings: course.totalRatings,
+        price: course.price,
+        startingDate: course.startingDate,
+        duration: course.duration,
+      });
+    }
+
+    // Sort courses by enrolled students (most popular first)
+    courseStatistics.sort((a, b) => b.enrolledStudents - a.enrolledStudents);
+
+    // Get most popular course
+    const mostPopularCourse =
+      courseStatistics.length > 0 ? courseStatistics[0] : null;
+
+    // Get highest rated course
+    const highestRatedCourse = instructorCourses
+      .filter((c) => c.rating > 0)
+      .sort((a, b) => b.rating - a.rating)[0];
+
+    // Calculate average rating across all instructor courses
+    const coursesWithRatings = instructorCourses.filter((c) => c.rating > 0);
+    const averageRating =
+      coursesWithRatings.length > 0
+        ? (
+            coursesWithRatings.reduce((sum, c) => sum + c.rating, 0) /
+            coursesWithRatings.length
+          ).toFixed(2)
+        : 0;
+
+    // Calculate total revenue (estimated based on enrollments)
+    const totalRevenue = instructorCourses.reduce((sum, course) => {
+      const enrolledCount = course.enrolledStudents
+        ? course.enrolledStudents.length
+        : 0;
+      return sum + course.price * enrolledCount;
+    }, 0);
+
+    // Get courses by category
+    const coursesByCategory = instructorCourses.reduce((acc, course) => {
+      const category = course.courseCategory;
+      if (!acc[category]) {
+        acc[category] = {
+          count: 0,
+          totalEnrolled: 0,
+        };
+      }
+      acc[category].count += 1;
+      acc[category].totalEnrolled += course.enrolledStudents
+        ? course.enrolledStudents.length
+        : 0;
+      return acc;
+    }, {});
+
+    const dashboardData = {
+      instructor: {
+        name: `${instructor.firstName} ${instructor.lastName}`,
+        email: instructor.email,
+      },
+      overview: {
+        totalCourses,
+        totalStudents: totalStudentsEnrolled,
+        averageRating: parseFloat(averageRating),
+        totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+      },
+      topCourses: {
+        mostPopular: mostPopularCourse
+          ? {
+              courseId: mostPopularCourse.courseId,
+              courseName: mostPopularCourse.courseName,
+              enrolledStudents: mostPopularCourse.enrolledStudents,
+            }
+          : null,
+        highestRated: highestRatedCourse
+          ? {
+              courseId: highestRatedCourse._id,
+              courseName: highestRatedCourse.courseName,
+              rating: highestRatedCourse.rating,
+              totalRatings: highestRatedCourse.totalRatings,
+            }
+          : null,
+      },
+      coursesByCategory,
+      allCourses: courseStatistics,
+    };
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "Instructor dashboard data retrieved successfully",
+      dashboardData
+    );
+  } catch (error) {
+    console.error("Get instructor dashboard error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Server error while retrieving dashboard data"
+    );
+  }
+};
 
 module.exports = {
   createCourse,
@@ -583,4 +818,5 @@ module.exports = {
   searchCourses,
   enrollInCourse,
   getEnrolledCourses,
+  getInstructorDashboard,
 };
