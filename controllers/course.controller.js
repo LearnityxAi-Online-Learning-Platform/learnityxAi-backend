@@ -354,6 +354,19 @@ const deleteCourse = async (req, res) => {
       );
     }
 
+    // Check if course has 10 or more enrolled students
+    const enrolledStudentsCount = course.enrolledStudents
+      ? course.enrolledStudents.length
+      : 0;
+
+    if (enrolledStudentsCount >= 10) {
+      return sendErrorResponse(
+        res,
+        400,
+        `Cannot delete course with ${enrolledStudentsCount} enrolled students. Courses with 10 or more enrolled students cannot be deleted.`
+      );
+    }
+
     // Soft delete using isActive=false
     course.isActive = false;
     await course.save();
@@ -365,6 +378,104 @@ const deleteCourse = async (req, res) => {
   } catch (error) {
     console.error("Delete course error:", error);
     return sendErrorResponse(res, 500, "Server error while deleting course");
+  }
+};
+
+// Deactivate course (mark as inactive without deletion)
+const deactivateCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const course = await Course.findById(id);
+
+    if (!course) {
+      return sendErrorResponse(res, 404, "Course not found");
+    }
+
+    // Check if the instructor is the owner of the course
+    if (course.instructorId.toString() !== req.user._id.toString()) {
+      return sendErrorResponse(
+        res,
+        403,
+        "You are not authorized to deactivate this course"
+      );
+    }
+
+    // Check if already inactive
+    if (!course.isActive) {
+      return sendErrorResponse(res, 400, "Course is already inactive");
+    }
+
+    // Deactivate the course
+    course.isActive = false;
+    await course.save();
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "Course deactivated successfully",
+      {
+        courseId: course._id,
+        courseName: course.courseName,
+        isActive: course.isActive,
+      }
+    );
+  } catch (error) {
+    console.error("Deactivate course error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Server error while deactivating course"
+    );
+  }
+};
+
+// Reactivate course (mark as active)
+const reactivateCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const course = await Course.findById(id);
+
+    if (!course) {
+      return sendErrorResponse(res, 404, "Course not found");
+    }
+
+    // Check if the instructor is the owner of the course
+    if (course.instructorId.toString() !== req.user._id.toString()) {
+      return sendErrorResponse(
+        res,
+        403,
+        "You are not authorized to reactivate this course"
+      );
+    }
+
+    // Check if already active
+    if (course.isActive) {
+      return sendErrorResponse(res, 400, "Course is already active");
+    }
+
+    // Reactivate the course
+    course.isActive = true;
+    await course.save();
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "Course reactivated successfully",
+      {
+        courseId: course._id,
+        courseName: course.courseName,
+        isActive: course.isActive,
+      }
+    );
+  } catch (error) {
+    console.error("Reactivate course error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Server error while reactivating course"
+    );
   }
 };
 
@@ -812,6 +923,8 @@ module.exports = {
   getCourseById,
   updateCourse,
   deleteCourse,
+  deactivateCourse,
+  reactivateCourse,
   getCourseCategories,
   getToolsList,
   getDurationsList,
