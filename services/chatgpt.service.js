@@ -125,7 +125,7 @@ Instructions:
 
     // Call ChatGPT API
     const response = await openai.chat.completions.create({
-      model: "gpt-5-nano",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
@@ -137,7 +137,7 @@ Instructions:
           content: prompt,
         },
       ],
-      temperature: 1,
+      temperature: 0.7,
       max_completion_tokens: 300,
     });
 
