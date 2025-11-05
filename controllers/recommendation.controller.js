@@ -17,11 +17,58 @@ const {
   saveToCache,
 } = require("../utils/recommendationCache");
 
-// Get course recommendations for authenticated users using ChatGPT
+// Get course recommendations (works with or without authentication)
 const getRecommendations = async (req, res) => {
   try {
-    const userId = req.user._id;
     const { page = 1, size = 10 } = req.query;
+    const isAuthenticated = req.user && req.user._id;
+    const userId = isAuthenticated ? req.user._id : null;
+
+    // For non-authenticated users, return rating-based recommendations only
+    if (!isAuthenticated) {
+      console.log("[Non-Authenticated Request] Returning rating-based recommendations");
+
+      // Fetch all active courses sorted by rating
+      const allCourses = await Course.find({ isActive: true })
+        .select(
+          "courseName courseCategory description whatYouWillLearn skills tools price rating totalRatings instructorName startingDate duration courseFlyerURL numberOfUserEnrolled"
+        )
+        .sort({ rating: -1, totalRatings: -1 })
+        .lean();
+
+      // Apply pagination
+      const pageNum = Math.max(1, parseInt(page));
+      const pageSize = Math.min(50, Math.max(1, parseInt(size)));
+      const startIndex = (pageNum - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+
+      const paginatedCourses = allCourses.slice(startIndex, endIndex);
+      const totalCourses = allCourses.length;
+      const totalPages = Math.ceil(totalCourses / pageSize);
+
+      return sendSuccessResponse(
+        res,
+        200,
+        "Rating-based course recommendations retrieved successfully",
+        {
+          courses: paginatedCourses,
+          pagination: {
+            currentPage: pageNum,
+            pageSize: pageSize,
+            totalCourses,
+            totalPages,
+            hasNextPage: pageNum < totalPages,
+            hasPrevPage: pageNum > 1,
+          },
+          recommendationType: "rating-based",
+          authenticated: false,
+          message: "Login to get AI-powered personalized recommendations",
+        }
+      );
+    }
+
+    // Authenticated user flow
+    console.log(`[Authenticated Request] User ${userId} - Checking AI recommendations`);
 
     // Check global API usage before proceeding
     const apiStats = getAPIUsageStats();
@@ -63,6 +110,7 @@ const getRecommendations = async (req, res) => {
       // Return cached response with updated API usage stats
       const responseData = {
         ...cacheResult.data,
+        authenticated: true,
         cached: true,
         cacheSource: "24-hour cache",
         userUsage,
@@ -236,6 +284,7 @@ const getRecommendations = async (req, res) => {
         hasPrevPage: pageNum > 1,
       },
       recommendationType,
+      authenticated: true,
       cached: false,
       apiUsage: {
         global: {

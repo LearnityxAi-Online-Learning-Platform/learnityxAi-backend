@@ -5,6 +5,7 @@ const {
   getAllUsersAPIUsage,
 } = require("../controllers/recommendation.controller");
 const { authenticateUser } = require("../middleware/auth.middleware");
+const { optionalAuth } = require("../middleware/optionalAuth.middleware");
 const { authorizeRoles } = require("../middleware/role.middleware");
 const {
   throttleRecommendationRequests,
@@ -12,12 +13,12 @@ const {
 
 const router = express.Router();
 
-// Get personalized course recommendations for authenticated students
-// Protected by rate limiting (1 request per 30 seconds) and per-user limits (2 per day)
+// Get course recommendations (works with or without authentication)
+// - Authenticated students: AI-powered personalized recommendations
+// - Non-authenticated users: Rating-based recommendations
 router.get(
   "/",
-  authenticateUser,
-  authorizeRoles("student"),
+  optionalAuth,
   throttleRecommendationRequests,
   getRecommendations
 );
