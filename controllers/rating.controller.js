@@ -184,6 +184,71 @@ const deleteRating = async (req, res) => {
   }
 };
 
+// Get all ratings given by a user
+const getAllUserRatings = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { page = 1, size = 10 } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page));
+    const pageSize = Math.min(50, Math.max(1, parseInt(size)));
+    const skip = (pageNum - 1) * pageSize;
+
+    // Get all ratings by this user with course details
+    const ratings = await CourseRating.find({ userId })
+      .populate({
+        path: "courseId",
+        select:
+          "courseName courseCategory instructorName description rating totalRatings courseFlyerURL startingDate duration price",
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize)
+      .lean();
+
+    const totalRatings = await CourseRating.countDocuments({ userId });
+    const totalPages = Math.ceil(totalRatings / pageSize);
+
+    // Calculate user's average rating
+    const allUserRatings = await CourseRating.find({ userId }).select("rating");
+    const userAverageRating =
+      allUserRatings.length > 0
+        ? (
+            allUserRatings.reduce((sum, r) => sum + r.rating, 0) /
+            allUserRatings.length
+          ).toFixed(1)
+        : 0;
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "User ratings retrieved successfully",
+      {
+        ratings,
+        pagination: {
+          currentPage: pageNum,
+          pageSize: pageSize,
+          totalRatings,
+          totalPages,
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
+        },
+        summary: {
+          totalRatingsGiven: totalRatings,
+          averageRatingGiven: parseFloat(userAverageRating),
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Get all user ratings error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Server error while fetching user ratings"
+    );
+  }
+};
+
 // Helper function to update course average rating
 const updateCourseRating = async (courseId) => {
   try {
@@ -214,4 +279,5 @@ module.exports = {
   getCourseRatings,
   getUserRating,
   deleteRating,
+  getAllUserRatings,
 };
