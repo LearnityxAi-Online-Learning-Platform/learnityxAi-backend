@@ -731,6 +731,53 @@ const enrollInCourse = async (req, res) => {
   }
 };
 
+// Unenroll from a course
+const unenrollFromCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const course = await Course.findById(id);
+
+    if (!course) {
+      return sendErrorResponse(res, 404, "Course not found");
+    }
+
+    // Check if student is enrolled
+    if (!course.enrolledStudents.includes(req.user._id)) {
+      return sendErrorResponse(
+        res,
+        400,
+        "You are not enrolled in this course"
+      );
+    }
+
+    // Remove student from enrolled students
+    course.enrolledStudents = course.enrolledStudents.filter(
+      (studentId) => studentId.toString() !== req.user._id.toString()
+    );
+    course.numberOfUserEnrolled = course.enrolledStudents.length;
+    await course.save();
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "Successfully unenrolled from course",
+      {
+        courseId: course._id,
+        courseName: course.courseName,
+        message: "You have been unenrolled from this course",
+      }
+    );
+  } catch (error) {
+    console.error("Unenroll from course error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Internal Server error. Failed to unenroll from course"
+    );
+  }
+};
+
 // get enrolled course
 const getEnrolledCourses = async (req, res) => {
   try {
@@ -930,6 +977,7 @@ module.exports = {
   getDurationsList,
   searchCourses,
   enrollInCourse,
+  unenrollFromCourse,
   getEnrolledCourses,
   getInstructorDashboard,
 };

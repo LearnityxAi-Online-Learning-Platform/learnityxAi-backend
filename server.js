@@ -9,6 +9,7 @@ const courseRoutes = require("./routes/course.routes");
 const uploadRoutes = require("./routes/upload.routes");
 const recommendationRoutes = require("./routes/recommendation.routes");
 const ratingRoutes = require("./routes/rating.routes");
+const userRoutes = require("./routes/user.routes");
 const health = require("./routes/health.routes");
 
 const {
@@ -59,6 +60,7 @@ app.use("/api/courses", courseRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/recommendations", recommendationRoutes);
 app.use("/api/ratings", ratingRoutes);
+app.use("/api/user", userRoutes);
 app.use("/api/health", health);
 
 // Error handling middleware

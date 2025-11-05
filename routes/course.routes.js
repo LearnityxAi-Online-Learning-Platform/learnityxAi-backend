@@ -13,6 +13,7 @@ const {
   getDurationsList,
   searchCourses,
   enrollInCourse,
+  unenrollFromCourse,
   getEnrolledCourses,
   getInstructorDashboard,
 } = require("../controllers/course.controller");
@@ -123,6 +124,14 @@ router.post(
   authenticateUser,
   authorizeRoles("student"),
   enrollInCourse
+);
+
+// student unenroll from a course
+router.post(
+  "/:id/unenroll",
+  authenticateUser,
+  authorizeRoles("student"),
+  unenrollFromCourse
 );
 
 module.exports = router;
