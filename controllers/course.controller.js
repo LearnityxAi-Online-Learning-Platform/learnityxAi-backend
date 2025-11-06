@@ -204,17 +204,21 @@ const getAllCourses = async (req, res) => {
 // get courses for instrutor
 const getInstructorCourses = async (req, res) => {
   try {
-    const { page = 1, size = 10 } = req.query;
+    const { page = 1, size = 10, includeInactive = 'false' } = req.query;
 
     const pageNum = Math.max(1, parseInt(page));
     const pageSize = Math.min(50, Math.max(1, parseInt(size)));
     const skip = (pageNum - 1) * pageSize;
 
-    // Only show active (not deleted/deactivated) courses to instructor
+    // Build query based on includeInactive parameter
     const query = {
-      instructorId: req.user._id,
-      isActive: true
+      instructorId: req.user._id
     };
+
+    // Only add isActive filter if includeInactive is false
+    if (includeInactive === 'false' || includeInactive === false) {
+      query.isActive = true;
+    }
 
     const courses = await Course.find(query)
       .sort({ createdAt: -1 })
@@ -225,6 +229,16 @@ const getInstructorCourses = async (req, res) => {
 
     const totalCourses = await Course.countDocuments(query);
     const totalPages = Math.ceil(totalCourses / pageSize);
+
+    // Calculate counts for active and inactive courses
+    const activeCourses = await Course.countDocuments({
+      instructorId: req.user._id,
+      isActive: true
+    });
+    const inactiveCourses = await Course.countDocuments({
+      instructorId: req.user._id,
+      isActive: false
+    });
 
     return sendSuccessResponse(
       res,
@@ -240,6 +254,12 @@ const getInstructorCourses = async (req, res) => {
           hasNextPage: pageNum < totalPages,
           hasPrevPage: pageNum > 1,
         },
+        summary: {
+          activeCourses,
+          inactiveCourses,
+          totalCourses: activeCourses + inactiveCourses,
+          showingInactive: includeInactive === 'true' || includeInactive === true
+        }
       }
     );
   } catch (error) {
@@ -266,11 +286,8 @@ const getCourseById = async (req, res) => {
       return sendErrorResponse(res, 404, "Course not found");
     }
 
-    // Only show active courses to public
-    // Instructors can see their own inactive courses
-    const isInstructor = req.user && course.instructorId._id.toString() === req.user._id.toString();
-
-    if (!course.isActive && !isInstructor) {
+    // Only show active courses - no exceptions
+    if (!course.isActive) {
       return sendErrorResponse(res, 404, "Course not found or no longer available");
     }
 
