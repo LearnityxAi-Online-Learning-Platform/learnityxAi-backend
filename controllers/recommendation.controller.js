@@ -372,7 +372,7 @@ const getRecommendations = async (req, res) => {
           errorMessage =
             "Global AI recommendation limit reached. Showing courses based on ratings.";
           console.warn(
-            "⚠️  ChatGPT API limit reached. Falling back to rating-based recommendations."
+            "ChatGPT API limit reached. Falling back to rating-based recommendations."
           );
         } else {
           // Other error, fallback to rating-based
