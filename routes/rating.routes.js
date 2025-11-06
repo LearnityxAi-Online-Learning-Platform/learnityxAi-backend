@@ -4,12 +4,16 @@ const {
   getCourseRatings,
   getUserRating,
   deleteRating,
+  getAllSystemReviews,
 } = require("../controllers/rating.controller");
 const { authenticateUser } = require("../middleware/auth.middleware");
 const { authorizeRoles } = require("../middleware/role.middleware");
 const { ratingValidation } = require("../middleware/authValidation.middleware");
 
 const router = express.Router();
+
+// Get all system reviews (public route)
+router.get("/", getAllSystemReviews);
 
 // Get all ratings for a specific course
 router.get("/course/:courseId", getCourseRatings);
