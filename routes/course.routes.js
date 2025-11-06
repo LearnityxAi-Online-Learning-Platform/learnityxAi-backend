@@ -45,7 +45,7 @@ router.get("/tools", getToolsList);
 // get course duration lists
 router.get("/durations", getDurationsList);
 
-// get course by ID
+// get course by ID (public route - no authentication required)
 router.get("/:id", getCourseById);
 
 // Protected route list that can only access to instructors

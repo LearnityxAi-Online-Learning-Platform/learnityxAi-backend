@@ -204,13 +204,49 @@ const getAllCourses = async (req, res) => {
 // get courses for instrutor
 const getInstructorCourses = async (req, res) => {
   try {
-    const { page = 1, size = 10 } = req.query;
+    const {
+      page = 1,
+      size = 10,
+      includeInactive = 'false',
+      category,
+      duration,
+      name,
+      tool
+    } = req.query;
 
     const pageNum = Math.max(1, parseInt(page));
     const pageSize = Math.min(50, Math.max(1, parseInt(size)));
     const skip = (pageNum - 1) * pageSize;
 
-    const query = { instructorId: req.user._id };
+    // Build query based on parameters
+    const query = {
+      instructorId: req.user._id
+    };
+
+    // Only add isActive filter if includeInactive is false
+    if (includeInactive === 'false' || includeInactive === false) {
+      query.isActive = true;
+    }
+
+    // Filter by category
+    if (category && category.trim() !== '') {
+      query.category = category.trim();
+    }
+
+    // Filter by duration
+    if (duration && duration.trim() !== '') {
+      query.duration = duration.trim();
+    }
+
+    // Filter by course name (case-insensitive search)
+    if (name && name.trim() !== '') {
+      query.courseName = { $regex: name.trim(), $options: 'i' };
+    }
+
+    // Filter by tool
+    if (tool && tool.trim() !== '') {
+      query.tools = { $in: [tool.trim()] };
+    }
 
     const courses = await Course.find(query)
       .sort({ createdAt: -1 })
@@ -221,6 +257,16 @@ const getInstructorCourses = async (req, res) => {
 
     const totalCourses = await Course.countDocuments(query);
     const totalPages = Math.ceil(totalCourses / pageSize);
+
+    // Calculate counts for active and inactive courses (without additional filters)
+    const activeCourses = await Course.countDocuments({
+      instructorId: req.user._id,
+      isActive: true
+    });
+    const inactiveCourses = await Course.countDocuments({
+      instructorId: req.user._id,
+      isActive: false
+    });
 
     return sendSuccessResponse(
       res,
@@ -236,6 +282,18 @@ const getInstructorCourses = async (req, res) => {
           hasNextPage: pageNum < totalPages,
           hasPrevPage: pageNum > 1,
         },
+        summary: {
+          activeCourses,
+          inactiveCourses,
+          totalCourses: activeCourses + inactiveCourses,
+          showingInactive: includeInactive === 'true' || includeInactive === true
+        },
+        appliedFilters: {
+          category: category || null,
+          duration: duration || null,
+          name: name || null,
+          tool: tool || null
+        }
       }
     );
   } catch (error) {
@@ -260,6 +318,11 @@ const getCourseById = async (req, res) => {
 
     if (!course) {
       return sendErrorResponse(res, 404, "Course not found");
+    }
+
+    // Only show active courses - no exceptions
+    if (!course.isActive) {
+      return sendErrorResponse(res, 404, "Course not found or no longer available");
     }
 
     return sendSuccessResponse(res, 200, "Course retrieved successfully", {

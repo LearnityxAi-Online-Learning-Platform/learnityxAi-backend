@@ -70,6 +70,53 @@ const getRecommendations = async (req, res) => {
     // Authenticated user flow
     console.log(`[Authenticated Request] User ${userId} - Checking AI recommendations`);
 
+    // Check if user is rate limited (too many requests within 30 seconds)
+    if (req.rateLimited) {
+      console.warn(
+        `[Rate Limited] User ${userId} - Returning rating-based recommendations due to rate limit`
+      );
+
+      // Fetch all active courses sorted by rating
+      const allCourses = await Course.find({ isActive: true })
+        .select(
+          "courseName courseCategory description whatYouWillLearn skills tools price rating totalRatings instructorName startingDate duration courseFlyerURL numberOfUserEnrolled"
+        )
+        .sort({ rating: -1, totalRatings: -1 })
+        .lean();
+
+      // Apply pagination
+      const pageNum = Math.max(1, parseInt(page));
+      const pageSize = Math.min(50, Math.max(1, parseInt(size)));
+      const startIndex = (pageNum - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+
+      const paginatedCourses = allCourses.slice(startIndex, endIndex);
+      const totalCourses = allCourses.length;
+      const totalPages = Math.ceil(totalCourses / pageSize);
+
+      return sendSuccessResponse(
+        res,
+        200,
+        "Rating-based course recommendations (rate limited)",
+        {
+          courses: paginatedCourses,
+          pagination: {
+            currentPage: pageNum,
+            pageSize: pageSize,
+            totalCourses,
+            totalPages,
+            hasNextPage: pageNum < totalPages,
+            hasPrevPage: pageNum > 1,
+          },
+          recommendationType: "rating-based",
+          authenticated: true,
+          rateLimited: true,
+          rateLimitInfo: req.rateLimitInfo,
+          message: req.rateLimitInfo.message,
+        }
+      );
+    }
+
     // Check global API usage before proceeding
     const apiStats = getAPIUsageStats();
     console.log(
@@ -98,6 +145,89 @@ const getRecommendations = async (req, res) => {
       .limit(15)
       .select("searchQuery filters")
       .lean();
+
+    // Helper function to calculate relevance score based on search history
+    const calculateRelevanceScore = (course, searchHistory) => {
+      if (!searchHistory || searchHistory.length === 0) return 0;
+
+      let score = 0;
+
+      // Process recent searches (give more weight to recent searches)
+      searchHistory.forEach((search, index) => {
+        // Weight decreases with older searches (most recent = highest weight)
+        const recencyWeight = searchHistory.length - index;
+        let matchPoints = 0;
+
+        // Check category match (highest priority - 10 points)
+        if (search.filters && search.filters.category &&
+            course.courseCategory === search.filters.category) {
+          matchPoints += 10;
+        }
+
+        // Check skills match (3 points per matching skill)
+        if (search.filters && search.filters.skills && search.filters.skills.length > 0 &&
+            course.skills && course.skills.length > 0) {
+          const matchingSkills = course.skills.filter(skill =>
+            search.filters.skills.some(searchSkill =>
+              searchSkill.toLowerCase() === skill.toLowerCase()
+            )
+          );
+          matchPoints += matchingSkills.length * 3;
+        }
+
+        // Check tools match (3 points per matching tool)
+        if (search.filters && search.filters.tools && search.filters.tools.length > 0 &&
+            course.tools && course.tools.length > 0) {
+          const matchingTools = course.tools.filter(tool =>
+            search.filters.tools.some(searchTool =>
+              searchTool.toLowerCase() === tool.toLowerCase()
+            )
+          );
+          matchPoints += matchingTools.length * 3;
+        }
+
+        // Check search query match in course name or description (5 points for name, 2 for description)
+        if (search.searchQuery && search.searchQuery.trim() !== "") {
+          const query = search.searchQuery.toLowerCase();
+          if (course.courseName && course.courseName.toLowerCase().includes(query)) {
+            matchPoints += 5;
+          }
+          if (course.description && course.description.toLowerCase().includes(query)) {
+            matchPoints += 2;
+          }
+        }
+
+        // Check price range match (2 points for exact match, 1 for partial)
+        if (search.filters) {
+          const coursePrice = course.price || 0;
+          if (search.filters.minPrice !== undefined && search.filters.maxPrice !== undefined) {
+            if (coursePrice >= search.filters.minPrice && coursePrice <= search.filters.maxPrice) {
+              matchPoints += 2;
+            }
+          } else if (search.filters.minPrice !== undefined) {
+            if (coursePrice >= search.filters.minPrice) {
+              matchPoints += 1;
+            }
+          } else if (search.filters.maxPrice !== undefined) {
+            if (coursePrice <= search.filters.maxPrice) {
+              matchPoints += 1;
+            }
+          }
+        }
+
+        // Check rating match (1 point)
+        if (search.filters && search.filters.minRating !== undefined) {
+          if (course.rating >= search.filters.minRating) {
+            matchPoints += 1;
+          }
+        }
+
+        // Apply recency weight to match points
+        score += matchPoints * (recencyWeight / searchHistory.length);
+      });
+
+      return score;
+    };
 
     // Check cache first - if valid cached result exists, return it
     const cacheResult = await checkCache(userId, enrolledCourses, searchHistory);
@@ -259,6 +389,34 @@ const getRecommendations = async (req, res) => {
         sortedCourses = availableCourses;
       }
     }
+
+    // Apply search relevance scoring to sort courses
+    // Calculate relevance score for each course
+    const coursesWithScores = sortedCourses.map(course => ({
+      ...course,
+      relevanceScore: calculateRelevanceScore(course, searchHistory)
+    }));
+
+    // Sort by relevance score (descending), then by rating, then by totalRatings
+    coursesWithScores.sort((a, b) => {
+      // First sort by relevance score
+      if (b.relevanceScore !== a.relevanceScore) {
+        return b.relevanceScore - a.relevanceScore;
+      }
+      // If relevance scores are equal, sort by rating
+      if (b.rating !== a.rating) {
+        return b.rating - a.rating;
+      }
+      // If ratings are equal, sort by totalRatings
+      return b.totalRatings - a.totalRatings;
+    });
+
+    // Remove the temporary relevanceScore field
+    sortedCourses = coursesWithScores.map(({ relevanceScore, ...course }) => course);
+
+    console.log(
+      `[Relevance Scoring] Sorted ${sortedCourses.length} courses by search relevance. Top 5 courses: ${sortedCourses.slice(0, 5).map(c => c.courseName).join(', ')}`
+    );
 
     // Apply pagination
     const pageNum = Math.max(1, parseInt(page));
