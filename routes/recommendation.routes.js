@@ -14,8 +14,8 @@ const {
 const router = express.Router();
 
 // Get course recommendations (works with or without authentication)
-// - Authenticated students: AI-powered personalized recommendations
-// - Non-authenticated users: Rating-based recommendations
+// - If Authenticated students: AI-powered personalized recommendations
+// - If Non-authenticated users: Rating-based recommendations
 router.get(
   "/",
   optionalAuth,

@@ -8,9 +8,9 @@ const CACHE_DURATION_HOURS = 24;
 
 /**
  * Generate hash of user state to detect changes
- * @param {Array} enrolledCourses - User's enrolled courses
- * @param {Array} searchHistory - User's search history
- * @returns {String} Hash of user state
+ * @param {Array} enrolledCourses 
+ * @param {Array} searchHistory 
+ * @returns {String}
  */
 const generateUserStateHash = (enrolledCourses, searchHistory) => {
   const enrolledIds = enrolledCourses.map((c) => c._id.toString()).sort();
@@ -26,8 +26,8 @@ const generateUserStateHash = (enrolledCourses, searchHistory) => {
 
 /**
  * Check if user can make a ChatGPT API request
- * @param {String} userId - User ID
- * @returns {Object} { canMakeRequest, remainingRequests, reason }
+ * @param {String} userId 
+ * @returns {Object}
  */
 const checkUserRequestLimit = async (userId) => {
   try {
@@ -60,7 +60,7 @@ const checkUserRequestLimit = async (userId) => {
 
 /**
  * Get cached recommendations if available and valid
- * @param {String} userId - User ID
+ * @param {String} userId 
  * @param {String} userStateHash - Hash of current user state
  * @returns {Object|null} Cached recommendations or null
  */
@@ -79,11 +79,11 @@ const getCachedRecommendations = async (userId, userStateHash) => {
 
 /**
  * Log user API request and cache response
- * @param {String} userId - User ID
+ * @param {String} userId 
  * @param {String} userStateHash - Hash of user state
  * @param {Object} response - API response to cache
  * @param {Boolean} success - Whether request was successful
- * @param {String} errorMessage - Error message if failed
+ * @param {String} errorMessage 
  * @returns {Object} Created request record
  */
 const logUserAPIRequest = async (
@@ -125,7 +125,7 @@ const logUserAPIRequest = async (
 
 /**
  * Get user's API usage summary
- * @param {String} userId - User ID
+ * @param {String} userId
  * @returns {Object} Usage summary
  */
 const getUserUsageSummary = async (userId) => {
@@ -133,7 +133,7 @@ const getUserUsageSummary = async (userId) => {
     const dailyCount = await UserAPIRequest.getDailyRequestCount(userId);
     const remaining = MAX_DAILY_REQUESTS_PER_USER - dailyCount;
 
-    // Get time until midnight (reset time)
+    // Get time until midnight reset time
     const now = new Date();
     const midnight = new Date();
     midnight.setHours(24, 0, 0, 0);

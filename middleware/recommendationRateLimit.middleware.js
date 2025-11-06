@@ -68,7 +68,7 @@ const throttleRecommendationRequests = (req, res, next) => {
     next();
   } catch (error) {
     console.error("Error in throttle middleware:", error);
-    // On error, allow request to proceed (fail open for better UX)
+    // On error, allow request to proceed 
     req.rateLimited = false;
     next();
   }

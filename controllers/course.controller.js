@@ -88,10 +88,10 @@ const getAllCourses = async (req, res) => {
 
         console.log(`[SearchHistory - getAllCourses] User ${req.user._id} has ${searchCount} searches`);
 
-        // If user has 15 or more searches, delete the oldest ones
-        const MAX_SEARCH_HISTORY = 3; // TODO: Change back to 15 for production
+        // If user has 3 or more searches, delete the oldest ones
+        const MAX_SEARCH_HISTORY = 3; 
         if (searchCount >= MAX_SEARCH_HISTORY) {
-          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1), so we can add 1 new
+          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1)
           console.log(`[SearchHistory - getAllCourses] Need to delete ${excessCount} old searches`);
 
           const oldestSearches = await SearchHistory.find({
@@ -264,7 +264,7 @@ const getInstructorCourses = async (req, res) => {
     const totalCourses = await Course.countDocuments(query);
     const totalPages = Math.ceil(totalCourses / pageSize);
 
-    // Calculate counts for active and inactive courses (without additional filters)
+    // Calculate counts for active and inactive courses
     const activeCourses = await Course.countDocuments({
       instructorId: req.user._id,
       isActive: true
@@ -634,7 +634,7 @@ const searchCourses = async (req, res) => {
         // If user has 10 or more searches, delete the oldest ones
         const MAX_SEARCH_HISTORY = 10;
         if (searchCount >= MAX_SEARCH_HISTORY) {
-          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1), so we can add 1 new
+          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1),
           // console.log(`[SearchHistory] Need to delete ${excessCount} old searches`);
 
           const oldestSearches = await SearchHistory.find({
