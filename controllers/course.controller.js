@@ -210,7 +210,11 @@ const getInstructorCourses = async (req, res) => {
     const pageSize = Math.min(50, Math.max(1, parseInt(size)));
     const skip = (pageNum - 1) * pageSize;
 
-    const query = { instructorId: req.user._id };
+    // Only show active (not deleted/deactivated) courses to instructor
+    const query = {
+      instructorId: req.user._id,
+      isActive: true
+    };
 
     const courses = await Course.find(query)
       .sort({ createdAt: -1 })
@@ -260,6 +264,14 @@ const getCourseById = async (req, res) => {
 
     if (!course) {
       return sendErrorResponse(res, 404, "Course not found");
+    }
+
+    // Only show active courses to public
+    // Instructors can see their own inactive courses
+    const isInstructor = req.user && course.instructorId._id.toString() === req.user._id.toString();
+
+    if (!course.isActive && !isInstructor) {
+      return sendErrorResponse(res, 404, "Course not found or no longer available");
     }
 
     return sendSuccessResponse(res, 200, "Course retrieved successfully", {

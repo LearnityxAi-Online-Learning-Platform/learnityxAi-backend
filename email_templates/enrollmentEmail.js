@@ -120,18 +120,20 @@ const enrollmentEmailTemplate = (
         }
         
         .course-details-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 15px;
+          width: 100%;
           margin: 25px 0;
         }
-        
+
         .detail-card {
           background: linear-gradient(135deg, #f0f4ff 0%, #f3e8ff 100%);
           padding: 20px;
           border-radius: 8px;
           border-left: 4px solid #8B5CF6;
           text-align: center;
+          width: 48%;
+          display: inline-block;
+          vertical-align: top;
+          box-sizing: border-box;
         }
         
         .detail-card .label {
@@ -179,12 +181,10 @@ const enrollmentEmailTemplate = (
         }
         
         .tags-container {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
           margin-top: 12px;
+          text-align: center;
         }
-        
+
         .skill-tag, .tool-tag {
           background: linear-gradient(135deg, #2C3E9F 0%, #8B5CF6 100%);
           color: white;
@@ -194,6 +194,7 @@ const enrollmentEmailTemplate = (
           font-weight: 600;
           display: inline-block;
           box-shadow: 0 2px 6px rgba(44, 62, 159, 0.3);
+          margin: 5px;
         }
         
         .tool-tag {
@@ -256,20 +257,59 @@ const enrollmentEmailTemplate = (
         }
         
         @media only screen and (max-width: 600px) {
-          .course-details-grid {
-            grid-template-columns: 1fr;
+          .email-wrapper {
+            padding: 10px !important;
           }
-          
+
+          .content {
+            padding: 20px !important;
+          }
+
+          .detail-card {
+            width: 100% !important;
+            display: block !important;
+            margin: 0 0 15px 0 !important;
+          }
+
+          .starting-date-highlight {
+            padding: 20px !important;
+          }
+
           .starting-date-highlight .date {
-            font-size: 24px;
+            font-size: 24px !important;
           }
-          
+
           .course-title {
-            font-size: 22px;
+            font-size: 20px !important;
           }
-          
-          .tags-container {
-            justify-content: center;
+
+          .course-banner {
+            height: 200px !important;
+          }
+
+          .success-banner h2 {
+            font-size: 20px !important;
+          }
+
+          .skill-tag, .tool-tag {
+            font-size: 12px !important;
+            padding: 6px 12px !important;
+          }
+
+          .cta-button {
+            width: 100% !important;
+            padding: 15px !important;
+          }
+
+          .description-box, .next-steps, .instructor-card {
+            padding: 15px !important;
+          }
+        }
+
+        /* Outlook specific fixes */
+        @media screen and (-webkit-min-device-pixel-ratio:0) {
+          .skill-tag, .tool-tag {
+            display: inline-block !important;
           }
         }
       </style>
@@ -310,11 +350,11 @@ const enrollmentEmailTemplate = (
 
           <!-- Course Details Grid -->
           <div class="course-details-grid">
-            <div class="detail-card">
+            <div class="detail-card" style="margin-right: 2%;">
               <div class="label">Duration</div>
               <div class="value">${duration}</div>
-            </div>
-            <div class="detail-card">
+            </div><!--
+            --><div class="detail-card" style="margin-left: 2%;">
               <div class="label">Course Fee</div>
               <div class="value">$${price}</div>
             </div>
