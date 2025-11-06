@@ -70,6 +70,7 @@ const getAllCourses = async (req, res) => {
       category,
       skills,
       tools,
+      duration,
       instructorName,
       minPrice,
       maxPrice,
@@ -152,6 +153,11 @@ const getAllCourses = async (req, res) => {
       query.tools = { $in: toolsArray };
     }
 
+    // filter by duration
+    if (duration) {
+      query.duration = duration.trim();
+    }
+
     // filter by instructor name
     if (instructorName) {
       query.instructorName = { $regex: instructorName, $options: "i" };
@@ -230,7 +236,7 @@ const getInstructorCourses = async (req, res) => {
 
     // Filter by category
     if (category && category.trim() !== '') {
-      query.category = category.trim();
+      query.courseCategory = category.trim();
     }
 
     // Filter by duration

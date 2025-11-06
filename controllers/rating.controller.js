@@ -249,6 +249,73 @@ const getAllUserRatings = async (req, res) => {
   }
 };
 
+// Get all system reviews and ratings (public endpoint)
+const getAllSystemReviews = async (req, res) => {
+  try {
+    const { page = 1, size = 10 } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page));
+    const pageSize = Math.min(50, Math.max(1, parseInt(size)));
+    const skip = (pageNum - 1) * pageSize;
+
+    // Get all ratings with user and course details, sorted by newest first
+    const reviews = await CourseRating.find()
+      .populate({
+        path: "userId",
+        select: "firstName lastName profileImage",
+      })
+      .populate({
+        path: "courseId",
+        select: "courseName courseCategory instructorName courseFlyerURL",
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize)
+      .lean();
+
+    const totalReviews = await CourseRating.countDocuments();
+    const totalPages = Math.ceil(totalReviews / pageSize);
+
+    // Calculate overall system statistics
+    const allRatings = await CourseRating.find().select("rating");
+    const averageSystemRating =
+      allRatings.length > 0
+        ? (
+            allRatings.reduce((sum, r) => sum + r.rating, 0) /
+            allRatings.length
+          ).toFixed(1)
+        : 0;
+
+    return sendSuccessResponse(
+      res,
+      200,
+      "System reviews retrieved successfully",
+      {
+        reviews,
+        pagination: {
+          currentPage: pageNum,
+          pageSize: pageSize,
+          totalReviews,
+          totalPages,
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
+        },
+        summary: {
+          totalReviews: totalReviews,
+          averageRating: parseFloat(averageSystemRating),
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Get all system reviews error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Server error while fetching system reviews"
+    );
+  }
+};
+
 // Helper function to update course average rating
 const updateCourseRating = async (courseId) => {
   try {
@@ -280,4 +347,5 @@ module.exports = {
   getUserRating,
   deleteRating,
   getAllUserRatings,
+  getAllSystemReviews,
 };
