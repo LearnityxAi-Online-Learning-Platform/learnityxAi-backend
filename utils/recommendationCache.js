@@ -9,10 +9,10 @@ const {
 
 /**
  * Check if cached recommendations exist and are valid
- * @param {String} userId - User ID
- * @param {Array} enrolledCourses - User's enrolled courses
- * @param {Array} searchHistory - User's search history
- * @returns {Object|null} { cached: true, data: {...} } or null
+ * @param {String} userId 
+ * @param {Array} enrolledCourses
+ * @param {Array} searchHistory
+ * @returns {Object|null} 
  */
 const checkCache = async (userId, enrolledCourses, searchHistory) => {
   try {
