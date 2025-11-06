@@ -230,7 +230,7 @@ const getInstructorCourses = async (req, res) => {
 
     // Filter by category
     if (category && category.trim() !== '') {
-      query.category = category.trim();
+      query.courseCategory = category.trim();
     }
 
     // Filter by duration

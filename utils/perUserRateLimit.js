@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const UserAPIRequest = require("../models/UserAPIRequest.model");
 
 // Configuration
-const MAX_DAILY_REQUESTS_PER_USER = 2;
+const MAX_DAILY_REQUESTS_PER_USER = 5;
 const CACHE_DURATION_HOURS = 24;
 
 /**
