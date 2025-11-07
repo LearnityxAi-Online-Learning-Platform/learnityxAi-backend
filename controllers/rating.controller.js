@@ -6,6 +6,9 @@ const {
   sendErrorResponse,
 } = require("../utils/responseHandler");
 
+// Configuration constants
+const LATEST_RATINGS_COUNT = 3; // Change this value to adjust how many latest ratings to return
+
 // Create or update course rating
 const rateCourse = async (req, res) => {
   try {
@@ -252,13 +255,6 @@ const getAllUserRatings = async (req, res) => {
 // Get all system reviews and ratings (public endpoint)
 const getAllSystemReviews = async (req, res) => {
   try {
-    const { page = 1, size = 10 } = req.query;
-
-    const pageNum = Math.max(1, parseInt(page));
-    const pageSize = Math.min(50, Math.max(1, parseInt(size)));
-    const skip = (pageNum - 1) * pageSize;
-
-    // Get all ratings with user and course details, sorted by newest first
     const reviews = await CourseRating.find()
       .populate({
         path: "userId",
@@ -269,20 +265,32 @@ const getAllSystemReviews = async (req, res) => {
         select: "courseName courseCategory instructorName courseFlyerURL",
       })
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(pageSize)
+      .limit(LATEST_RATINGS_COUNT)
+      .lean();
+
+    // latestRatings is LATEST_RATINGS_COUNT
+    const latestRatings = await CourseRating.find()
+      .populate({
+        path: "userId",
+        select: "firstName lastName profileImage",
+      })
+      .populate({
+        path: "courseId",
+        select:
+          "courseName courseCategory instructorName courseFlyerURL rating",
+      })
+      .sort({ createdAt: -1 })
+      .limit(LATEST_RATINGS_COUNT)
       .lean();
 
     const totalReviews = await CourseRating.countDocuments();
-    const totalPages = Math.ceil(totalReviews / pageSize);
 
     // Calculate overall system statistics
     const allRatings = await CourseRating.find().select("rating");
     const averageSystemRating =
       allRatings.length > 0
         ? (
-            allRatings.reduce((sum, r) => sum + r.rating, 0) /
-            allRatings.length
+            allRatings.reduce((sum, r) => sum + r.rating, 0) / allRatings.length
           ).toFixed(1)
         : 0;
 
@@ -292,17 +300,11 @@ const getAllSystemReviews = async (req, res) => {
       "System reviews retrieved successfully",
       {
         reviews,
-        pagination: {
-          currentPage: pageNum,
-          pageSize: pageSize,
-          totalReviews,
-          totalPages,
-          hasNextPage: pageNum < totalPages,
-          hasPrevPage: pageNum > 1,
-        },
+        latestRatings, // Latest N ratings (same as reviews)
         summary: {
           totalReviews: totalReviews,
           averageRating: parseFloat(averageSystemRating),
+          latestCount: LATEST_RATINGS_COUNT, // Show how many latest ratings are returned
         },
       }
     );
