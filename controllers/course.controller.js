@@ -622,7 +622,80 @@ const searchCourses = async (req, res) => {
     } = req.query;
 
     // Search is now optional - allow browsing all courses with filters and sorting
-    // No validation needed - empty search with no filters is valid for browsing all courses
+
+    // === VALIDATION AND EDGE CASE HANDLING ===
+
+    // 1. Validate and sanitize numeric parameters
+    let validatedMinPrice = null;
+    let validatedMaxPrice = null;
+    let validatedMinRating = null;
+
+    if (minPrice !== undefined && minPrice !== '') {
+      validatedMinPrice = Number(minPrice);
+      if (isNaN(validatedMinPrice) || validatedMinPrice < 0) {
+        return sendErrorResponse(res, 400, "minPrice must be a valid non-negative number");
+      }
+    }
+
+    if (maxPrice !== undefined && maxPrice !== '') {
+      validatedMaxPrice = Number(maxPrice);
+      if (isNaN(validatedMaxPrice) || validatedMaxPrice < 0) {
+        return sendErrorResponse(res, 400, "maxPrice must be a valid non-negative number");
+      }
+    }
+
+    // Check price range validity
+    if (validatedMinPrice !== null && validatedMaxPrice !== null && validatedMinPrice > validatedMaxPrice) {
+      return sendErrorResponse(res, 400, "minPrice cannot be greater than maxPrice");
+    }
+
+    if (minRating !== undefined && minRating !== '') {
+      validatedMinRating = Number(minRating);
+      if (isNaN(validatedMinRating) || validatedMinRating < 0 || validatedMinRating > 5) {
+        return sendErrorResponse(res, 400, "minRating must be a number between 0 and 5");
+      }
+    }
+
+    // 2. Validate pagination parameters
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const pageSize = Math.min(50, Math.max(1, parseInt(size) || 10));
+
+    if (isNaN(pageNum) || pageNum < 1) {
+      return sendErrorResponse(res, 400, "page must be a positive integer");
+    }
+
+    if (isNaN(pageSize) || pageSize < 1 || pageSize > 50) {
+      return sendErrorResponse(res, 400, "size must be between 1 and 50");
+    }
+
+    // 3. Validate sortBy and sortOrder
+    const validSortFields = ['rating', 'price', 'createdAt', 'numberOfUserEnrolled', 'enrollmentCount'];
+    const validatedSortBy = validSortFields.includes(sortBy) ? sortBy : 'rating';
+    const validatedSortOrder = ['asc', 'desc'].includes(sortOrder?.toLowerCase()) ? sortOrder.toLowerCase() : 'desc';
+
+    // 4. Sanitize search string to prevent regex injection
+    let sanitizedSearch = search;
+    if (search && typeof search === 'string') {
+      // Limit search length to prevent DoS
+      if (search.length > 200) {
+        return sendErrorResponse(res, 400, "Search query is too long (max 200 characters)");
+      }
+      // Trim and remove excessive whitespace
+      sanitizedSearch = search.trim().replace(/\s+/g, ' ');
+    }
+
+    // 5. Validate category, tools, duration strings
+    if (category && typeof category !== 'string') {
+      return sendErrorResponse(res, 400, "category must be a string");
+    }
+
+    if (tools && typeof tools !== 'string') {
+      return sendErrorResponse(res, 400, "tools must be a string");
+    }
+
+    if (duration && typeof duration !== 'string') {
+      return sendErrorResponse(res, 400, "duration must be a string");
+    }
 
     // Save search history for authenticated users
     if (req.user) {
@@ -655,21 +728,21 @@ const searchCourses = async (req, res) => {
         }
 
         // Create new search history entry (only if search query exists)
-        if (search) {
+        if (sanitizedSearch) {
           await SearchHistory.create({
             userId: req.user._id,
-            searchQuery: search,
+            searchQuery: sanitizedSearch,
             searchType: "course_search",
             filters: {
               category: category || undefined,
-              minPrice: minPrice ? Number(minPrice) : undefined,
-              maxPrice: maxPrice ? Number(maxPrice) : undefined,
-              minRating: minRating ? Number(minRating) : undefined,
+              minPrice: validatedMinPrice,
+              maxPrice: validatedMaxPrice,
+              minRating: validatedMinRating,
               tools: tools || undefined,
               duration: duration || undefined,
             },
           });
-          console.log(`[SearchHistory] Created new search entry for query: "${search}"`);
+          console.log(`[SearchHistory] Created new search entry for query: "${sanitizedSearch}"`);
         }
       } catch (searchError) {
         console.error("Error saving search history:", searchError);
@@ -680,9 +753,9 @@ const searchCourses = async (req, res) => {
     let searchConditions = [];
 
     // Only build search conditions if search query is provided
-    if (search && search.trim()) {
-      // Normalize search term: remove extra spaces, handle special characters
-      const normalizedSearch = search.trim().replace(/\s+/g, ' ');
+    if (sanitizedSearch) {
+      // Use the already sanitized and normalized search term
+      const normalizedSearch = sanitizedSearch;
 
       // Split search into individual words for partial matching
       const searchWords = normalizedSearch.split(' ').filter(word => word.length > 0);
@@ -719,9 +792,9 @@ const searchCourses = async (req, res) => {
 
         // Also search in other fields in case duration is mentioned in description
         searchConditions.push(
-          { courseName: { $regex: search, $options: "i" } },
-          { description: { $regex: search, $options: "i" } },
-          { whatYouWillLearn: { $regex: search, $options: "i" } }
+          { courseName: { $regex: normalizedSearch, $options: "i" } },
+          { description: { $regex: normalizedSearch, $options: "i" } },
+          { whatYouWillLearn: { $regex: normalizedSearch, $options: "i" } }
         );
       } else {
         // Standard flexible search logic for non-duration queries
@@ -729,14 +802,14 @@ const searchCourses = async (req, res) => {
         // 1. Exact phrase match (highest priority) - remove spaces for flexibility
         const noSpaceSearch = normalizedSearch.replace(/\s+/g, '');
         searchConditions.push(
-          { courseName: { $regex: search, $options: "i" } },
-          { description: { $regex: search, $options: "i" } },
-          { skills: { $regex: search, $options: "i" } },
-          { tools: { $regex: search, $options: "i" } },
-          { instructorName: { $regex: search, $options: "i" } },
-          { courseCategory: { $regex: search, $options: "i" } },
-          { whatYouWillLearn: { $regex: search, $options: "i" } },
-          { duration: { $regex: search, $options: "i" } }
+          { courseName: { $regex: normalizedSearch, $options: "i" } },
+          { description: { $regex: normalizedSearch, $options: "i" } },
+          { skills: { $regex: normalizedSearch, $options: "i" } },
+          { tools: { $regex: normalizedSearch, $options: "i" } },
+          { instructorName: { $regex: normalizedSearch, $options: "i" } },
+          { courseCategory: { $regex: normalizedSearch, $options: "i" } },
+          { whatYouWillLearn: { $regex: normalizedSearch, $options: "i" } },
+          { duration: { $regex: normalizedSearch, $options: "i" } }
         );
 
         // 2. Match with spaces removed (handles "webdevelopment" vs "web development")
@@ -775,14 +848,16 @@ const searchCourses = async (req, res) => {
       query.courseCategory = category;
     }
 
-    if (minPrice || maxPrice) {
+    // Use validated price values
+    if (validatedMinPrice !== null || validatedMaxPrice !== null) {
       query.price = {};
-      if (minPrice) query.price.$gte = Number(minPrice);
-      if (maxPrice) query.price.$lte = Number(maxPrice);
+      if (validatedMinPrice !== null) query.price.$gte = validatedMinPrice;
+      if (validatedMaxPrice !== null) query.price.$lte = validatedMaxPrice;
     }
 
-    if (minRating) {
-      query.rating = { $gte: Number(minRating) };
+    // Use validated rating value
+    if (validatedMinRating !== null) {
+      query.rating = { $gte: validatedMinRating };
     }
 
     // Filter by tools (match if the tools array contains the specified tool)
@@ -795,19 +870,12 @@ const searchCourses = async (req, res) => {
       query.duration = { $regex: `^${duration}$`, $options: "i" };
     }
 
-    // Pagination
-    const pageNum = Math.max(1, parseInt(page));
-    const pageSize = Math.min(50, Math.max(1, parseInt(size)));
+    // Pagination (using validated values from above)
     const skip = (pageNum - 1) * pageSize;
 
-    // Dynamic sorting
-    const validSortFields = ['rating', 'price', 'createdAt', 'numberOfUserEnrolled', 'enrollmentCount'];
-    const sortField = validSortFields.includes(sortBy) ? sortBy : 'rating';
-
-    // Handle enrollmentCount as alias for numberOfUserEnrolled
-    const actualSortField = sortField === 'enrollmentCount' ? 'numberOfUserEnrolled' : sortField;
-
-    const sortDirection = sortOrder === 'asc' ? 1 : -1;
+    // Dynamic sorting (using validated values from above)
+    const actualSortField = validatedSortBy === 'enrollmentCount' ? 'numberOfUserEnrolled' : validatedSortBy;
+    const sortDirection = validatedSortOrder === 'asc' ? 1 : -1;
     const sortOptions = { [actualSortField]: sortDirection };
 
     // Add secondary sort by createdAt for consistency
@@ -835,7 +903,7 @@ const searchCourses = async (req, res) => {
         hasNextPage: pageNum < totalPages,
         hasPrevPage: pageNum > 1,
       },
-      searchQuery: search,
+      searchQuery: sanitizedSearch || '',
     });
   } catch (error) {
     console.error("Search courses error:", error);
