@@ -615,11 +615,14 @@ const searchCourses = async (req, res) => {
       minPrice,
       maxPrice,
       minRating,
+      tools,
+      duration,
+      sortBy = 'rating',
+      sortOrder = 'desc',
     } = req.query;
 
-    if (!search) {
-      return sendErrorResponse(res, 400, "Search query is required");
-    }
+    // Search is now optional - allow browsing all courses with filters and sorting
+    // No validation needed - empty search with no filters is valid for browsing all courses
 
     // Save search history for authenticated users
     if (req.user) {
@@ -651,92 +654,121 @@ const searchCourses = async (req, res) => {
           // console.log(`[SearchHistory] Deleted ${deleteResult.deletedCount} searches`);
         }
 
-        // Create new search history entry
-        await SearchHistory.create({
-          userId: req.user._id,
-          searchQuery: search,
-          searchType: "course_search",
-          filters: {
-            category: category || undefined,
-            minPrice: minPrice ? Number(minPrice) : undefined,
-            maxPrice: maxPrice ? Number(maxPrice) : undefined,
-            minRating: minRating ? Number(minRating) : undefined,
-          },
-        });
-        console.log(`[SearchHistory] Created new search entry for query: "${search}"`);
+        // Create new search history entry (only if search query exists)
+        if (search) {
+          await SearchHistory.create({
+            userId: req.user._id,
+            searchQuery: search,
+            searchType: "course_search",
+            filters: {
+              category: category || undefined,
+              minPrice: minPrice ? Number(minPrice) : undefined,
+              maxPrice: maxPrice ? Number(maxPrice) : undefined,
+              minRating: minRating ? Number(minRating) : undefined,
+              tools: tools || undefined,
+              duration: duration || undefined,
+            },
+          });
+          console.log(`[SearchHistory] Created new search entry for query: "${search}"`);
+        }
       } catch (searchError) {
         console.error("Error saving search history:", searchError);
       }
     }
 
     // Build flexible search query with pattern matching
-    // Normalize search term: remove extra spaces, handle special characters
-    const normalizedSearch = search.trim().replace(/\s+/g, ' ');
-
-    // Split search into individual words for partial matching
-    const searchWords = normalizedSearch.split(' ').filter(word => word.length > 0);
-
-    // Create flexible regex patterns for each word
-    // This allows for partial matches and handles spacing issues
-    const wordPatterns = searchWords.map(word => {
-      // Escape special regex characters
-      const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // Create pattern that allows for flexible matching
-      return new RegExp(escapedWord, 'i');
-    });
-
-    // Build comprehensive search conditions
     let searchConditions = [];
 
-    // 1. Exact phrase match (highest priority) - remove spaces for flexibility
-    const noSpaceSearch = normalizedSearch.replace(/\s+/g, '');
-    searchConditions.push(
-      { courseName: { $regex: search, $options: "i" } },
-      { description: { $regex: search, $options: "i" } },
-      { skills: { $regex: search, $options: "i" } },
-      { tools: { $regex: search, $options: "i" } },
-      { instructorName: { $regex: search, $options: "i" } },
-      { courseCategory: { $regex: search, $options: "i" } },
-      { whatYouWillLearn: { $regex: search, $options: "i" } },
-      { duration: { $regex: search, $options: "i" } }
-    );
+    // Only build search conditions if search query is provided
+    if (search && search.trim()) {
+      // Normalize search term: remove extra spaces, handle special characters
+      const normalizedSearch = search.trim().replace(/\s+/g, ' ');
 
-    // 2. Match with spaces removed (handles "webdevelopment" vs "web development")
-    if (normalizedSearch.includes(' ') || noSpaceSearch !== normalizedSearch) {
-      const noSpacePattern = noSpaceSearch.split('').join('\\s*');
-      searchConditions.push(
-        { courseName: { $regex: noSpacePattern, $options: "i" } },
-        { description: { $regex: noSpacePattern, $options: "i" } },
-        { skills: { $regex: noSpacePattern, $options: "i" } },
-        { tools: { $regex: noSpacePattern, $options: "i" } },
-        { courseCategory: { $regex: noSpacePattern, $options: "i" } },
-        { whatYouWillLearn: { $regex: noSpacePattern, $options: "i" } },
-        { duration: { $regex: noSpacePattern, $options: "i" } }
-      );
-    }
+      // Split search into individual words for partial matching
+      const searchWords = normalizedSearch.split(' ').filter(word => word.length > 0);
 
-    // 3. Individual word matches (handles partial searches)
-    if (searchWords.length > 1) {
-      searchWords.forEach(word => {
-        if (word.length >= 3) { // Only for words with 3+ characters
+      // Detect if search query is a duration pattern (e.g., "1 week", "6 weeks", "3 months")
+      const durationPattern = /^(\d+)\s*(week|weeks|month|months|day|days|hour|hours)$/i;
+      const isDurationQuery = durationPattern.test(normalizedSearch);
+
+      // Create flexible regex patterns for each word
+      // This allows for partial matches and handles spacing issues
+      const wordPatterns = searchWords.map(word => {
+        // Escape special regex characters
+        const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Create pattern that allows for flexible matching
+        return new RegExp(escapedWord, 'i');
+      });
+
+      // If it's a duration query, use exact matching for duration field
+      if (isDurationQuery) {
+        // Extract number and unit for flexible matching (handles "1 week" vs "1 weeks")
+        const match = normalizedSearch.match(durationPattern);
+        const number = match[1];
+        const unit = match[2].toLowerCase();
+
+        // Normalize unit to handle singular/plural (week/weeks)
+        const normalizedUnit = unit.endsWith('s') ? unit : unit + 's?';
+
+        // Create exact duration pattern: "X week(s)" or "X weeks"
+        const exactDurationPattern = `^${number}\\s*${normalizedUnit}$`;
+
+        searchConditions.push(
+          { duration: { $regex: exactDurationPattern, $options: "i" } }
+        );
+
+        // Also search in other fields in case duration is mentioned in description
+        searchConditions.push(
+          { courseName: { $regex: search, $options: "i" } },
+          { description: { $regex: search, $options: "i" } },
+          { whatYouWillLearn: { $regex: search, $options: "i" } }
+        );
+      } else {
+        // Standard flexible search logic for non-duration queries
+
+        // 1. Exact phrase match (highest priority) - remove spaces for flexibility
+        const noSpaceSearch = normalizedSearch.replace(/\s+/g, '');
+        searchConditions.push(
+          { courseName: { $regex: search, $options: "i" } },
+          { description: { $regex: search, $options: "i" } },
+          { skills: { $regex: search, $options: "i" } },
+          { tools: { $regex: search, $options: "i" } },
+          { instructorName: { $regex: search, $options: "i" } },
+          { courseCategory: { $regex: search, $options: "i" } },
+          { whatYouWillLearn: { $regex: search, $options: "i" } },
+          { duration: { $regex: search, $options: "i" } }
+        );
+
+        // 2. Match with spaces removed (handles "webdevelopment" vs "web development")
+        if (normalizedSearch.includes(' ') || noSpaceSearch !== normalizedSearch) {
+          const noSpacePattern = noSpaceSearch.split('').join('\\s*');
           searchConditions.push(
-            { courseName: { $regex: word, $options: "i" } },
-            { description: { $regex: word, $options: "i" } },
-            { skills: { $regex: word, $options: "i" } },
-            { tools: { $regex: word, $options: "i" } },
-            { instructorName: { $regex: word, $options: "i" } },
-            { courseCategory: { $regex: word, $options: "i" } },
-            { whatYouWillLearn: { $regex: word, $options: "i" } },
-            { duration: { $regex: word, $options: "i" } }
+            { courseName: { $regex: noSpacePattern, $options: "i" } },
+            { description: { $regex: noSpacePattern, $options: "i" } },
+            { skills: { $regex: noSpacePattern, $options: "i" } },
+            { tools: { $regex: noSpacePattern, $options: "i" } },
+            { courseCategory: { $regex: noSpacePattern, $options: "i" } },
+            { whatYouWillLearn: { $regex: noSpacePattern, $options: "i" } },
+            { duration: { $regex: noSpacePattern, $options: "i" } }
           );
         }
-      });
+
+        // 3. Individual word matches (handles partial searches)
+        // Only use individual word matching for very specific cases to avoid too many results
+        // Skip this for now to keep search results more relevant
+        // Individual word matching can be too permissive (e.g., "data science" matching any course with "data" OR "science")
+      }
     }
 
+    // Build base query
     let query = {
       isActive: true,
-      $or: searchConditions,
     };
+
+    // Only add $or condition if there are search conditions
+    if (searchConditions.length > 0) {
+      query.$or = searchConditions;
+    }
 
     // Apply filters
     if (category) {
@@ -753,13 +785,38 @@ const searchCourses = async (req, res) => {
       query.rating = { $gte: Number(minRating) };
     }
 
+    // Filter by tools (match if the tools array contains the specified tool)
+    if (tools) {
+      query.tools = { $regex: tools, $options: "i" };
+    }
+
+    // Filter by duration (exact match)
+    if (duration) {
+      query.duration = { $regex: `^${duration}$`, $options: "i" };
+    }
+
     // Pagination
     const pageNum = Math.max(1, parseInt(page));
     const pageSize = Math.min(50, Math.max(1, parseInt(size)));
     const skip = (pageNum - 1) * pageSize;
 
+    // Dynamic sorting
+    const validSortFields = ['rating', 'price', 'createdAt', 'numberOfUserEnrolled', 'enrollmentCount'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'rating';
+
+    // Handle enrollmentCount as alias for numberOfUserEnrolled
+    const actualSortField = sortField === 'enrollmentCount' ? 'numberOfUserEnrolled' : sortField;
+
+    const sortDirection = sortOrder === 'asc' ? 1 : -1;
+    const sortOptions = { [actualSortField]: sortDirection };
+
+    // Add secondary sort by createdAt for consistency
+    if (actualSortField !== 'createdAt') {
+      sortOptions.createdAt = -1;
+    }
+
     const courses = await Course.find(query)
-      .sort({ rating: -1, createdAt: -1 })
+      .sort(sortOptions)
       .skip(skip)
       .limit(pageSize)
       .select("-enrolledStudents")
