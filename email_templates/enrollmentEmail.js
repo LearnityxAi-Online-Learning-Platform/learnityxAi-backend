@@ -413,7 +413,8 @@ const enrollmentEmailTemplate = (
 
           <div style="text-align: center; margin: 30px 0;">
             <a href="${
-              process.env.FRONTEND_URL || "http://localhost:3000"
+              process.env.FRONTEND_URL ||
+              "http://www.learnityxai.corespace.click/my-courses"
             }/student/enrolled" class="cta-button">
               Access My Courses
             </a>
