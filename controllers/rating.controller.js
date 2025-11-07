@@ -7,7 +7,7 @@ const {
 } = require("../utils/responseHandler");
 
 // Configuration constants
-const LATEST_RATINGS_COUNT = 3; // Change this value to adjust how many latest ratings to return
+const LATEST_RATINGS_COUNT = 3; 
 
 // Create or update course rating
 const rateCourse = async (req, res) => {
@@ -300,7 +300,7 @@ const getAllSystemReviews = async (req, res) => {
       "System reviews retrieved successfully",
       {
         reviews,
-        latestRatings, // Latest N ratings (same as reviews)
+        latestRatings, 
         summary: {
           totalReviews: totalReviews,
           averageRating: parseFloat(averageSystemRating),

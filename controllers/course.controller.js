@@ -621,9 +621,7 @@ const searchCourses = async (req, res) => {
       sortOrder = 'desc',
     } = req.query;
 
-    // Search is now optional - allow browsing all courses with filters and sorting
-
-    // === VALIDATION AND EDGE CASE HANDLING ===
+    // alow to browsing all courses with filters and sorting
 
     // 1. Validate and sanitize numeric parameters
     let validatedMinPrice = null;
@@ -710,7 +708,7 @@ const searchCourses = async (req, res) => {
         // If user has 10 or more searches, delete the oldest ones
         const MAX_SEARCH_HISTORY = 10;
         if (searchCount >= MAX_SEARCH_HISTORY) {
-          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1),
+          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1);
           // console.log(`[SearchHistory] Need to delete ${excessCount} old searches`);
 
           const oldestSearches = await SearchHistory.find({
@@ -764,12 +762,12 @@ const searchCourses = async (req, res) => {
       const durationPattern = /^(\d+)\s*(week|weeks|month|months|day|days|hour|hours)$/i;
       const isDurationQuery = durationPattern.test(normalizedSearch);
 
-      // Create flexible regex patterns for each word
+      // Create flexble regex patterns for each word
       // This allows for partial matches and handles spacing issues
       const wordPatterns = searchWords.map(word => {
         // Escape special regex characters
         const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Create pattern that allows for flexible matching
+        // Create patern that allows for flexible matching
         return new RegExp(escapedWord, 'i');
       });
 
@@ -829,7 +827,7 @@ const searchCourses = async (req, res) => {
         // 3. Individual word matches (handles partial searches)
         // Only use individual word matching for very specific cases to avoid too many results
         // Skip this for now to keep search results more relevant
-        // Individual word matching can be too permissive (e.g., "data science" matching any course with "data" OR "science")
+        // Individual word matching can be too permissive
       }
     }
 
@@ -935,7 +933,7 @@ const enrollInCourse = async (req, res) => {
       return sendErrorResponse(res, 400, "Already enrolled in this course");
     }
 
-    // Add student to enrolled students
+    // Add stdent to enrolled students
     course.enrolledStudents.push(req.user._id);
     course.numberOfUserEnrolled = course.enrolledStudents.length;
     await course.save();
