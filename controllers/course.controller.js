@@ -669,16 +669,73 @@ const searchCourses = async (req, res) => {
       }
     }
 
-    // Build search query
+    // Build flexible search query with pattern matching
+    // Normalize search term: remove extra spaces, handle special characters
+    const normalizedSearch = search.trim().replace(/\s+/g, ' ');
+
+    // Split search into individual words for partial matching
+    const searchWords = normalizedSearch.split(' ').filter(word => word.length > 0);
+
+    // Create flexible regex patterns for each word
+    // This allows for partial matches and handles spacing issues
+    const wordPatterns = searchWords.map(word => {
+      // Escape special regex characters
+      const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Create pattern that allows for flexible matching
+      return new RegExp(escapedWord, 'i');
+    });
+
+    // Build comprehensive search conditions
+    let searchConditions = [];
+
+    // 1. Exact phrase match (highest priority) - remove spaces for flexibility
+    const noSpaceSearch = normalizedSearch.replace(/\s+/g, '');
+    searchConditions.push(
+      { courseName: { $regex: search, $options: "i" } },
+      { description: { $regex: search, $options: "i" } },
+      { skills: { $regex: search, $options: "i" } },
+      { tools: { $regex: search, $options: "i" } },
+      { instructorName: { $regex: search, $options: "i" } },
+      { courseCategory: { $regex: search, $options: "i" } },
+      { whatYouWillLearn: { $regex: search, $options: "i" } },
+      { duration: { $regex: search, $options: "i" } }
+    );
+
+    // 2. Match with spaces removed (handles "webdevelopment" vs "web development")
+    if (normalizedSearch.includes(' ') || noSpaceSearch !== normalizedSearch) {
+      const noSpacePattern = noSpaceSearch.split('').join('\\s*');
+      searchConditions.push(
+        { courseName: { $regex: noSpacePattern, $options: "i" } },
+        { description: { $regex: noSpacePattern, $options: "i" } },
+        { skills: { $regex: noSpacePattern, $options: "i" } },
+        { tools: { $regex: noSpacePattern, $options: "i" } },
+        { courseCategory: { $regex: noSpacePattern, $options: "i" } },
+        { whatYouWillLearn: { $regex: noSpacePattern, $options: "i" } },
+        { duration: { $regex: noSpacePattern, $options: "i" } }
+      );
+    }
+
+    // 3. Individual word matches (handles partial searches)
+    if (searchWords.length > 1) {
+      searchWords.forEach(word => {
+        if (word.length >= 3) { // Only for words with 3+ characters
+          searchConditions.push(
+            { courseName: { $regex: word, $options: "i" } },
+            { description: { $regex: word, $options: "i" } },
+            { skills: { $regex: word, $options: "i" } },
+            { tools: { $regex: word, $options: "i" } },
+            { instructorName: { $regex: word, $options: "i" } },
+            { courseCategory: { $regex: word, $options: "i" } },
+            { whatYouWillLearn: { $regex: word, $options: "i" } },
+            { duration: { $regex: word, $options: "i" } }
+          );
+        }
+      });
+    }
+
     let query = {
       isActive: true,
-      $or: [
-        { courseName: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { skills: { $regex: search, $options: "i" } },
-        { tools: { $regex: search, $options: "i" } },
-        { instructorName: { $regex: search, $options: "i" } },
-      ],
+      $or: searchConditions,
     };
 
     // Apply filters
