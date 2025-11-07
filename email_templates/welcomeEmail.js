@@ -41,7 +41,8 @@ const welcomeEmailTemplate = (userName, role) => {
           
           <div style="text-align: center; margin: 35px 0;">
             <a href="${
-              process.env.PLATFORM_URL || "https://learnityxai.com"
+              process.env.PLATFORM_URL ||
+              "https://www.learnityxai.corespace.click"
             }/dashboard" class="cta-button">
               Go to Dashboard →
             </a>
