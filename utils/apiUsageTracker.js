@@ -75,7 +75,7 @@ const logAPICall = (endpoint, success, error = null, prompt = null) => {
       endpoint,
       success,
       error: error ? error.message : null,
-      callNumber: success ? newTotalCalls : null, // Only assign call number to successful calls
+      callNumber: success ? newTotalCalls : null, 
       prompt: prompt || null, // Log the prompt sent to ChatGPT
     };
 
