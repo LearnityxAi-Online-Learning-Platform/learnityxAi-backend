@@ -3,14 +3,11 @@ const crypto = require("crypto");
 const UserAPIRequest = require("../models/UserAPIRequest.model");
 
 // Configuration
-const MAX_DAILY_REQUESTS_PER_USER = 15;
+const MAX_DAILY_REQUESTS_PER_USER = 10;
 const CACHE_DURATION_HOURS = 24;
 
 /**
  * Generate hash of user state to detect changes
- * @param {Array} enrolledCourses 
- * @param {Array} searchHistory 
- * @returns {String}
  */
 const generateUserStateHash = (enrolledCourses, searchHistory) => {
   const enrolledIds = enrolledCourses.map((c) => c._id.toString()).sort();
@@ -26,8 +23,6 @@ const generateUserStateHash = (enrolledCourses, searchHistory) => {
 
 /**
  * Check if user can make a ChatGPT API request
- * @param {String} userId 
- * @returns {Object}
  */
 const checkUserRequestLimit = async (userId) => {
   try {
@@ -60,9 +55,6 @@ const checkUserRequestLimit = async (userId) => {
 
 /**
  * Get cached recommendations if available and valid
- * @param {String} userId 
- * @param {String} userStateHash - Hash of current user state
- * @returns {Object|null} Cached recommendations or null
  */
 const getCachedRecommendations = async (userId, userStateHash) => {
   try {
@@ -79,12 +71,6 @@ const getCachedRecommendations = async (userId, userStateHash) => {
 
 /**
  * Log user API request and cache response
- * @param {String} userId 
- * @param {String} userStateHash - Hash of user state
- * @param {Object} response - API response to cache
- * @param {Boolean} success - Whether request was successful
- * @param {String} errorMessage 
- * @returns {Object} Created request record
  */
 const logUserAPIRequest = async (
   userId,
@@ -125,8 +111,6 @@ const logUserAPIRequest = async (
 
 /**
  * Get user's API usage summary
- * @param {String} userId
- * @returns {Object} Usage summary
  */
 const getUserUsageSummary = async (userId) => {
   try {

@@ -5,11 +5,11 @@
 const userLastRequestTime = new Map();
 
 // Minimum time between requests in milliseconds (30 seconds)
-const MIN_REQUEST_INTERVAL = 30 * 1000;
+const MIN_REQUEST_INTERVAL = 20 * 1000;
 
 /**
- * Middleware to throttle recommendation requests
- * Ensures users can only make 1 request per 30 seconds
+ * Midleware to recommendation requests
+ * Ensures users can only make 1 request per 20 seconds
  * When rate limited, sets req.rateLimited flag instead of returning error
  * This allows the controller to return rating-based recommendations
  */
@@ -75,7 +75,7 @@ const throttleRecommendationRequests = (req, res, next) => {
 };
 
 /**
- * Clear rate limit for a specific user (useful for testing)
+ * Clear rate limit for a specific user
  */
 const clearUserRateLimit = (userId) => {
   userLastRequestTime.delete(userId.toString());
