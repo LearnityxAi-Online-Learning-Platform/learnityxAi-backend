@@ -12,6 +12,7 @@ const {
   getToolsList,
   getDurationsList,
   searchCourses,
+  aiSearchCourses,
   enrollInCourse,
   unenrollFromCourse,
   getEnrolledCourses,
@@ -35,6 +36,9 @@ router.get("/", optionalAuth, getAllCourses);
 
 // search courses (with optional authentication for search history)
 router.get("/search", optionalAuth, searchCourses);
+
+// AI-powered course search (with optional authentication for personalized results)
+router.get("/ai-search", optionalAuth, aiSearchCourses);
 
 // get course categories
 router.get("/categories", getCourseCategories);

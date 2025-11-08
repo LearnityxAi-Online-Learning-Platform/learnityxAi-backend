@@ -9,10 +9,6 @@ const {
 
 /**
  * Check if cached recommendations exist and are valid
- * @param {String} userId 
- * @param {Array} enrolledCourses
- * @param {Array} searchHistory
- * @returns {Object|null} 
  */
 const checkCache = async (userId, enrolledCourses, searchHistory) => {
   try {
@@ -59,10 +55,6 @@ const checkCache = async (userId, enrolledCourses, searchHistory) => {
 
 /**
  * Save recommendations to cache
- * @param {String} userId - User ID
- * @param {String} userStateHash - Hash of user state
- * @param {Object} recommendationData - Data to cache
- * @returns {Boolean} Success status
  */
 const saveToCache = async (userId, userStateHash, recommendationData) => {
   try {
@@ -77,7 +69,6 @@ const saveToCache = async (userId, userStateHash, recommendationData) => {
 
 /**
  * Invalidate cache for a user (when they enroll in a new course)
- * @param {String} userId - User ID
  */
 const invalidateUserCache = async (userId) => {
   try {

@@ -6,6 +6,14 @@ const {
   sendSuccessResponse,
   sendErrorResponse,
 } = require("../utils/responseHandler");
+const {
+  generateAISearchRecommendations,
+  getAPIUsageStats,
+} = require("../services/chatgpt.service");
+const {
+  checkUserRequestLimit,
+  getUserUsageSummary,
+} = require("../utils/perUserRateLimit");
 
 // create new course
 const createCourse = async (req, res) => {
@@ -619,11 +627,10 @@ const searchCourses = async (req, res) => {
       duration,
       sortBy = 'rating',
       sortOrder = 'desc',
+      useAI = 'auto', // 'auto', 'true', or 'false'
     } = req.query;
 
-    // Search is now optional - allow browsing all courses with filters and sorting
-
-    // === VALIDATION AND EDGE CASE HANDLING ===
+    // alow to browsing all courses with filters and sorting
 
     // 1. Validate and sanitize numeric parameters
     let validatedMinPrice = null;
@@ -710,7 +717,7 @@ const searchCourses = async (req, res) => {
         // If user has 10 or more searches, delete the oldest ones
         const MAX_SEARCH_HISTORY = 10;
         if (searchCount >= MAX_SEARCH_HISTORY) {
-          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1),
+          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1);
           // console.log(`[SearchHistory] Need to delete ${excessCount} old searches`);
 
           const oldestSearches = await SearchHistory.find({
@@ -749,13 +756,157 @@ const searchCourses = async (req, res) => {
       }
     }
 
+    // === AI-POWERED SEARCH INTEGRATION ===
+    const isAuthenticated = req.user && req.user._id;
+    const userId = isAuthenticated ? req.user._id : null;
+
+    // Detect if query looks like a natural language question
+    const isNaturalLanguageQuery = sanitizedSearch && (
+      sanitizedSearch.toLowerCase().includes('i want') ||
+      sanitizedSearch.toLowerCase().includes('how to') ||
+      sanitizedSearch.toLowerCase().includes('should i') ||
+      sanitizedSearch.toLowerCase().includes('what course') ||
+      sanitizedSearch.toLowerCase().includes('best course') ||
+      sanitizedSearch.toLowerCase().includes('become a') ||
+      sanitizedSearch.toLowerCase().includes('learn to') ||
+      sanitizedSearch.split(' ').length > 5 // Long queries are likely natural language
+    );
+
+    const shouldUseAI = (
+      (useAI === 'true') ||
+      (useAI === 'auto' && isNaturalLanguageQuery && sanitizedSearch)
+    );
+
+    // Try AI-powered search if conditions are met (requires authentication)
+    if (shouldUseAI && sanitizedSearch && isAuthenticated) {
+      try {
+        const userLimitCheck = await checkUserRequestLimit(userId);
+        const userUsage = await getUserUsageSummary(userId);
+        const apiStats = getAPIUsageStats();
+
+        if (userLimitCheck.canMakeRequest) {
+          console.log(`[AI Search Integration] Using AI for query: "${sanitizedSearch}"`);
+
+          // Get user's enrolled courses for context
+          const enrolledCourses = await Course.find({
+            enrolledStudents: userId,
+            isActive: true,
+          })
+            .select("courseName courseCategory skills tools")
+            .lean();
+
+          // Fetch all active courses for AI to analyze
+          let aiQuery = { isActive: true };
+
+          // Apply filters if provided
+          if (category) aiQuery.courseCategory = category;
+          if (validatedMinPrice !== null || validatedMaxPrice !== null) {
+            aiQuery.price = {};
+            if (validatedMinPrice !== null) aiQuery.price.$gte = validatedMinPrice;
+            if (validatedMaxPrice !== null) aiQuery.price.$lte = validatedMaxPrice;
+          }
+          if (validatedMinRating !== null) aiQuery.rating = { $gte: validatedMinRating };
+          if (tools) aiQuery.tools = { $regex: tools, $options: "i" };
+          if (duration) aiQuery.duration = { $regex: `^${duration}$`, $options: "i" };
+
+          const allCourses = await Course.find(aiQuery)
+            .select(
+              "courseName courseCategory description whatYouWillLearn skills tools price rating totalRatings instructorName startingDate duration courseFlyerURL numberOfUserEnrolled"
+            )
+            .lean();
+
+          const userContext = enrolledCourses.length > 0 ? { enrolledCourses } : null;
+          const recommendedCourseIds = await generateAISearchRecommendations(
+            sanitizedSearch,
+            allCourses,
+            userContext
+          );
+
+          if (recommendedCourseIds && recommendedCourseIds.length > 0) {
+            // AI search successful - return AI-ordered results
+            const courseMap = new Map(
+              allCourses.map(course => [course._id.toString(), course])
+            );
+
+            let aiSortedCourses = recommendedCourseIds
+              .map(id => courseMap.get(id))
+              .filter(course => course !== undefined);
+
+            // Only return AI-recommended courses for focused, relevant results
+            // Do not add all remaining courses to keep recommendations precise
+
+            // Apply pagination
+            const skip = (pageNum - 1) * pageSize;
+            const paginatedCourses = aiSortedCourses.slice(skip, skip + pageSize);
+            const totalCourses = aiSortedCourses.length;
+            const totalPages = Math.ceil(totalCourses / pageSize);
+
+            const updatedApiStats = getAPIUsageStats();
+            return sendSuccessResponse(res, 200, "AI-powered search results retrieved", {
+              courses: paginatedCourses,
+              pagination: {
+                currentPage: pageNum,
+                pageSize: pageSize,
+                totalCourses,
+                totalPages,
+                hasNextPage: pageNum < totalPages,
+                hasPrevPage: pageNum > 1,
+              },
+              searchQuery: sanitizedSearch || '',
+              recommendationType: 'ai-powered',
+              authenticated: true,
+              apiUsage: {
+                global: {
+                  used: updatedApiStats.totalCalls,
+                  remaining: updatedApiStats.remainingCalls,
+                  limit: updatedApiStats.maxCalls,
+                  percentageUsed: updatedApiStats.percentageUsed,
+                },
+                personal: {
+                  used: userUsage.dailyRequestsUsed + 1,
+                  remaining: userUsage.remainingRequests - 1,
+                  limit: userUsage.dailyRequestsLimit,
+                  hoursUntilReset: userUsage.hoursUntilReset,
+                },
+              },
+            });
+          }
+        } else {
+          console.log(`[AI Search Integration] User ${userId} has reached daily AI limit, falling back to keyword search`);
+        }
+      } catch (aiError) {
+        console.error("AI search integration error, falling back to keyword search:", aiError);
+        // Continue with regular search on error
+      }
+    }
+
+    // === FALLBACK TO REGULAR KEYWORD SEARCH ===
     // Build flexible search query with pattern matching
     let searchConditions = [];
 
     // Only build search conditions if search query is provided
     if (sanitizedSearch) {
-      // Use the already sanitized and normalized search term
-      const normalizedSearch = sanitizedSearch;
+      // Extract meaningful keywords from natural language queries
+      let normalizedSearch = sanitizedSearch;
+
+      // If this looks like a natural language question, extract keywords
+      if (isNaturalLanguageQuery) {
+        // Remove common filler words but keep important ones
+        const stopWords = ['i', 'want', 'wants', 'to', 'be', 'a', 'an', 'the', 'how', 'what', 'should', 'course', 'courses', 'learn', 'become', 'get', 'follow'];
+        const words = sanitizedSearch.toLowerCase().split(/\s+/);
+        const keywords = words.filter(word =>
+          word.length > 2 && !stopWords.includes(word)
+        );
+
+        // Use extracted keywords if we found any, otherwise keep original
+        if (keywords.length > 0) {
+          normalizedSearch = keywords.join(' ');
+          console.log(`[Keyword Extraction] Original: "${sanitizedSearch}" -> Keywords: "${normalizedSearch}"`);
+        } else {
+          // If all words were filtered out, use the original query
+          console.log(`[Keyword Extraction] No keywords found, using original: "${sanitizedSearch}"`);
+        }
+      }
 
       // Split search into individual words for partial matching
       const searchWords = normalizedSearch.split(' ').filter(word => word.length > 0);
@@ -764,12 +915,12 @@ const searchCourses = async (req, res) => {
       const durationPattern = /^(\d+)\s*(week|weeks|month|months|day|days|hour|hours)$/i;
       const isDurationQuery = durationPattern.test(normalizedSearch);
 
-      // Create flexible regex patterns for each word
+      // Create flexble regex patterns for each word
       // This allows for partial matches and handles spacing issues
       const wordPatterns = searchWords.map(word => {
         // Escape special regex characters
         const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Create pattern that allows for flexible matching
+        // Create patern that allows for flexible matching
         return new RegExp(escapedWord, 'i');
       });
 
@@ -826,10 +977,21 @@ const searchCourses = async (req, res) => {
           );
         }
 
-        // 3. Individual word matches (handles partial searches)
-        // Only use individual word matching for very specific cases to avoid too many results
-        // Skip this for now to keep search results more relevant
-        // Individual word matching can be too permissive (e.g., "data science" matching any course with "data" OR "science")
+        // 3. Individual word matches (handles partial searches like "web developer", "data scientist")
+        if (searchWords.length >= 2) {
+          // For multi-word searches, also search for individual words
+          searchWords.forEach(word => {
+            if (word.length > 3) { // Only search for words longer than 3 characters
+              searchConditions.push(
+                { courseName: { $regex: word, $options: "i" } },
+                { description: { $regex: word, $options: "i" } },
+                { courseCategory: { $regex: word, $options: "i" } },
+                { skills: { $regex: word, $options: "i" } },
+                { tools: { $regex: word, $options: "i" } }
+              );
+            }
+          });
+        }
       }
     }
 
@@ -893,7 +1055,8 @@ const searchCourses = async (req, res) => {
     const totalCourses = await Course.countDocuments(query);
     const totalPages = Math.ceil(totalCourses / pageSize);
 
-    return sendSuccessResponse(res, 200, "Search results retrieved", {
+    // Build response data
+    const responseData = {
       courses,
       pagination: {
         currentPage: pageNum,
@@ -904,7 +1067,16 @@ const searchCourses = async (req, res) => {
         hasPrevPage: pageNum > 1,
       },
       searchQuery: sanitizedSearch || '',
-    });
+      recommendationType: 'keyword-based',
+      authenticated: !!isAuthenticated, // Convert to boolean
+    };
+
+    // Add message for non-authenticated users who tried natural language query
+    if (!isAuthenticated && isNaturalLanguageQuery) {
+      responseData.message = 'Login to get AI-powered course recommendations for your query';
+    }
+
+    return sendSuccessResponse(res, 200, "Search results retrieved", responseData);
   } catch (error) {
     console.error("Search courses error:", error);
     return sendErrorResponse(
@@ -935,7 +1107,7 @@ const enrollInCourse = async (req, res) => {
       return sendErrorResponse(res, 400, "Already enrolled in this course");
     }
 
-    // Add student to enrolled students
+    // Add stdent to enrolled students
     course.enrolledStudents.push(req.user._id);
     course.numberOfUserEnrolled = course.enrolledStudents.length;
     await course.save();
@@ -1075,6 +1247,273 @@ const getEnrolledCourses = async (req, res) => {
       res,
       500,
       "Internal Server error. Faile to fetching enrolled courses"
+    );
+  }
+};
+
+// AI-powered course search using ChatGPT
+const aiSearchCourses = async (req, res) => {
+  try {
+    const {
+      query,
+      page = 1,
+      size = 10,
+      useAI = 'true'
+    } = req.query;
+
+    if (!query || query.trim() === '') {
+      return sendErrorResponse(res, 400, "Search query is required");
+    }
+
+    const sanitizedQuery = query.trim();
+    const isAuthenticated = req.user && req.user._id;
+    const userId = isAuthenticated ? req.user._id : null;
+
+    // Pagination
+    const pageNum = Math.max(1, parseInt(page));
+    const pageSize = Math.min(50, Math.max(1, parseInt(size)));
+
+    // Save search history for authenticated users
+    if (isAuthenticated) {
+      try {
+        const searchCount = await SearchHistory.countDocuments({
+          userId: req.user._id,
+        });
+
+        console.log(`[AI Search History] User ${req.user._id} has ${searchCount} searches`);
+
+        const MAX_SEARCH_HISTORY = 10;
+        if (searchCount >= MAX_SEARCH_HISTORY) {
+          const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1);
+          const oldestSearches = await SearchHistory.find({
+            userId: req.user._id,
+          })
+            .sort({ createdAt: 1 })
+            .limit(excessCount)
+            .select("_id");
+
+          const idsToDelete = oldestSearches.map((search) => search._id);
+          await SearchHistory.deleteMany({ _id: { $in: idsToDelete } });
+        }
+
+        await SearchHistory.create({
+          userId: req.user._id,
+          searchQuery: sanitizedQuery,
+          searchType: "ai_course_search",
+          filters: {},
+        });
+        console.log(`[AI Search History] Created new search entry for query: "${sanitizedQuery}"`);
+      } catch (searchError) {
+        console.error("Error saving AI search history:", searchError);
+      }
+    }
+
+    // Fetch all active courses
+    const allCourses = await Course.find({ isActive: true })
+      .select(
+        "courseName courseCategory description whatYouWillLearn skills tools price rating totalRatings instructorName startingDate duration courseFlyerURL numberOfUserEnrolled"
+      )
+      .lean();
+
+    if (allCourses.length === 0) {
+      return sendSuccessResponse(res, 200, "No courses available", {
+        courses: [],
+        pagination: {
+          currentPage: pageNum,
+          pageSize: pageSize,
+          totalCourses: 0,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPrevPage: false,
+        },
+        searchQuery: sanitizedQuery,
+        recommendationType: "none",
+      });
+    }
+
+    let sortedCourses = [];
+    let recommendationType = "keyword-based";
+    let errorMessage = null;
+    let apiUsageInfo = null;
+
+    // Check if user wants AI recommendations and if authenticated user can use AI
+    const shouldUseAI = useAI === 'true' || useAI === true;
+
+    if (shouldUseAI && isAuthenticated) {
+      // Check if user can make a ChatGPT request (per-user limit check)
+      const userLimitCheck = await checkUserRequestLimit(userId);
+      const userUsage = await getUserUsageSummary(userId);
+      const apiStats = getAPIUsageStats();
+
+      apiUsageInfo = {
+        global: {
+          used: apiStats.totalCalls,
+          remaining: apiStats.remainingCalls,
+          limit: apiStats.maxCalls,
+          percentageUsed: apiStats.percentageUsed,
+        },
+        personal: {
+          used: userUsage.dailyRequestsUsed,
+          remaining: userUsage.remainingRequests,
+          limit: userUsage.dailyRequestsLimit,
+          hoursUntilReset: userUsage.hoursUntilReset,
+        },
+      };
+
+      if (!userLimitCheck.canMakeRequest) {
+        console.warn(
+          `[AI Search - Per-User Limit] User ${userId} - Daily limit reached`
+        );
+        errorMessage = userLimitCheck.reason;
+        recommendationType = "keyword-based";
+        sortedCourses = allCourses;
+      } else {
+        // Try AI-powered search
+        try {
+          // Get user's enrolled courses for context
+          let userContext = null;
+          if (isAuthenticated) {
+            const enrolledCourses = await Course.find({
+              enrolledStudents: userId,
+              isActive: true,
+            })
+              .select("courseName courseCategory skills tools")
+              .lean();
+
+            if (enrolledCourses.length > 0) {
+              userContext = { enrolledCourses };
+            }
+          }
+
+          const recommendedCourseIds = await generateAISearchRecommendations(
+            sanitizedQuery,
+            allCourses,
+            userContext
+          );
+
+          if (recommendedCourseIds && recommendedCourseIds.length > 0) {
+            // Sort courses based on AI recommendation order
+            const courseMap = new Map(
+              allCourses.map(course => [course._id.toString(), course])
+            );
+
+            sortedCourses = recommendedCourseIds
+              .map(id => courseMap.get(id))
+              .filter(course => course !== undefined);
+
+            recommendationType = "ai-powered";
+
+            // If AI didn't return enough courses, add keyword-based results
+            if (sortedCourses.length < allCourses.length) {
+              const existingIds = new Set(sortedCourses.map(c => c._id.toString()));
+              const additionalCourses = allCourses
+                .filter(c => !existingIds.has(c._id.toString()));
+              sortedCourses = [...sortedCourses, ...additionalCourses];
+            }
+          } else {
+            // AI returned empty, fallback to keyword-based
+            sortedCourses = allCourses;
+            recommendationType = "keyword-based";
+          }
+
+          // Update API usage info after AI call
+          const updatedApiStats = getAPIUsageStats();
+          apiUsageInfo.global = {
+            used: updatedApiStats.totalCalls,
+            remaining: updatedApiStats.remainingCalls,
+            limit: updatedApiStats.maxCalls,
+            percentageUsed: updatedApiStats.percentageUsed,
+          };
+        } catch (error) {
+          console.error("AI search error:", error);
+
+          if (error.message === "API_LIMIT_REACHED") {
+            recommendationType = "keyword-based";
+            errorMessage = "Global AI search limit reached. Showing keyword-based results.";
+          } else {
+            recommendationType = "keyword-based";
+            errorMessage = "AI search temporarily unavailable. Showing keyword-based results.";
+          }
+
+          sortedCourses = allCourses;
+        }
+      }
+    } else {
+      // Non-authenticated users or AI disabled - use keyword-based search
+      sortedCourses = allCourses;
+
+      if (!isAuthenticated && shouldUseAI) {
+        errorMessage = "Login to use AI-powered course search";
+      }
+    }
+
+    // Apply keyword filtering if using keyword-based search
+    if (recommendationType === "keyword-based") {
+      const searchLower = sanitizedQuery.toLowerCase();
+      sortedCourses = sortedCourses.filter(course => {
+        return (
+          course.courseName.toLowerCase().includes(searchLower) ||
+          course.description.toLowerCase().includes(searchLower) ||
+          course.courseCategory.toLowerCase().includes(searchLower) ||
+          course.skills.some(skill => skill.toLowerCase().includes(searchLower)) ||
+          course.tools.some(tool => tool.toLowerCase().includes(searchLower)) ||
+          (course.instructorName && course.instructorName.toLowerCase().includes(searchLower))
+        );
+      });
+
+      // Sort by rating
+      sortedCourses.sort((a, b) => {
+        if (b.rating !== a.rating) {
+          return b.rating - a.rating;
+        }
+        return b.totalRatings - a.totalRatings;
+      });
+    }
+
+    // Apply pagination
+    const startIndex = (pageNum - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedCourses = sortedCourses.slice(startIndex, endIndex);
+    const totalCourses = sortedCourses.length;
+    const totalPages = Math.ceil(totalCourses / pageSize);
+
+    const responseData = {
+      courses: paginatedCourses,
+      pagination: {
+        currentPage: pageNum,
+        pageSize: pageSize,
+        totalCourses,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+      },
+      searchQuery: sanitizedQuery,
+      recommendationType,
+      authenticated: isAuthenticated,
+    };
+
+    if (apiUsageInfo) {
+      responseData.apiUsage = apiUsageInfo;
+    }
+
+    if (errorMessage) {
+      responseData.message = errorMessage;
+    }
+
+    return sendSuccessResponse(
+      res,
+      200,
+      recommendationType === "ai-powered"
+        ? "AI-powered course search results"
+        : "Course search results",
+      responseData
+    );
+  } catch (error) {
+    console.error("AI search courses error:", error);
+    return sendErrorResponse(
+      res,
+      500,
+      "Server error while searching courses"
     );
   }
 };
@@ -1227,6 +1666,7 @@ module.exports = {
   getToolsList,
   getDurationsList,
   searchCourses,
+  aiSearchCourses,
   enrollInCourse,
   unenrollFromCourse,
   getEnrolledCourses,

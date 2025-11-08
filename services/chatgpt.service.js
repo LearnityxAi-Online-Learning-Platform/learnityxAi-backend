@@ -107,7 +107,7 @@ const generateCourseRecommendations = async (
 
     // Create optimized prompt for ChatGPT
     prompt = `You are an AI course recommendation expert.
-Analyze the user's learning profile and suggest the best courses.
+Analyze the user's learning profile and suggest the best courses based on their interests and search behavior.
 
 User's Enrolled Courses:
 ${enrolledCoursesText}
@@ -118,10 +118,22 @@ Available Courses:
 ${availableCoursesText}
 
 Instructions:
-1. Recommend up to 15 relevant courses.
-2. Prioritize high ratings and relevant skills.
-3. Output only JSON array of course IDs, no text.
-4. Format: ["courseId1", "courseId2", ...]`;
+1. Analyze the user's recent search queries to understand their current learning goals and interests.
+2. PRIORITIZE courses that match the user's search queries (MOST IMPORTANT).
+3. If the user searched for specific careers or fields (e.g., "data scientist", "web developer"):
+   - ONLY recommend courses in those EXACT fields
+   - DO NOT recommend courses from unrelated categories
+4. Consider the user's enrolled courses to suggest complementary or advanced courses.
+5. Prioritize courses by:
+   - Direct relevance to recent searches (HIGHEST PRIORITY)
+   - High ratings and good reviews
+   - Logical learning progression
+6. Recommend up to 15 HIGHLY RELEVANT courses.
+7. If the user's searches indicate a specific field, focus recommendations on that field only.
+8. Output only JSON array of course IDs, no explanations or additional text.
+9. Format: ["courseId1", "courseId2", ...]
+
+IMPORTANT: Recent search queries reveal the user's current interests. Make sure recommendations align with what they're actively looking for.`;
 
     // Call ChatGPT API
     const response = await openai.chat.completions.create({
@@ -193,6 +205,148 @@ Instructions:
   }
 };
 
+// Generate AI-powered search recommendations using ChatGPT
+const generateAISearchRecommendations = async (searchQuery, availableCourses, userContext = null) => {
+  // Check if we can make an API call
+  if (!canMakeAPICall()) {
+    const summary = getUsageSummary();
+    console.error(
+      `API call limit reached: ${summary.totalCalls}/${summary.maxCalls} calls used`
+    );
+    throw new Error("API_LIMIT_REACHED");
+  }
+
+  const remainingCalls = getRemainingCalls();
+  console.log(
+    `Making ChatGPT API call for search query: "${searchQuery}". Remaining calls: ${remainingCalls}/250`
+  );
+
+  let prompt = null;
+
+  try {
+    // Build user context if available
+    let userContextText = "";
+    if (userContext && userContext.enrolledCourses && userContext.enrolledCourses.length > 0) {
+      const enrolledCoursesText = userContext.enrolledCourses
+        .map(
+          (course) =>
+            `${course.courseName} (Category: ${course.courseCategory}, Skills: ${course.skills.join(", ")})`
+        )
+        .join("; ");
+      userContextText = `\n\nUser's Previously Enrolled Courses:\n${enrolledCoursesText}`;
+    }
+
+    // Build available courses text (limit to top 50 for performance)
+    const topCourses = availableCourses.slice(0, 50);
+    const availableCoursesText = topCourses
+      .map(
+        (course) =>
+          `ID: ${course._id}, Name: ${course.courseName}, Category: ${
+            course.courseCategory
+          }, Rating: ${course.rating}/5 (${
+            course.totalRatings || 0
+          } ratings), Skills: ${course.skills.join(
+            ", "
+          )}, Tools: ${course.tools.join(", ")}, Price: $${course.price}, Description: ${course.description.substring(0, 100)}`
+      )
+      .join("\n");
+
+    // Create prompt for ChatGPT
+    prompt = `You are an AI course recommendation expert helping users find the perfect courses.
+
+User Query: "${searchQuery}"${userContextText}
+
+Available Courses:
+${availableCoursesText}
+
+Instructions:
+1. Analyze the user's query to understand their career goals, learning interests, or skill requirements.
+2. ONLY recommend courses that DIRECTLY match the user's query.
+3. Be VERY STRICT - Do NOT include courses from unrelated fields.
+4. For specific career queries (e.g., "data scientist", "web developer"):
+   - ONLY recommend courses in that EXACT field
+   - Example: For "data scientist", ONLY recommend Data Science, Machine Learning, Statistics courses
+   - DO NOT include Web Development, Mobile Development, or unrelated courses
+5. Prioritize courses by:
+   - Direct relevance to the query (MOST IMPORTANT)
+   - High ratings and good reviews
+   - Logical learning progression
+6. Recommend 3-10 HIGHLY RELEVANT courses (quality over quantity).
+7. If fewer than 3 relevant courses exist, only return those - DO NOT add unrelated courses to fill the list.
+8. Output ONLY a JSON array of course IDs, no explanations or additional text.
+9. Format: ["courseId1", "courseId2", ...]
+
+IMPORTANT: Stay focused on the user's specific goal. Do not recommend courses outside their stated interest area.`;
+
+    // Call ChatGPT API
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an intelligent course recommendation AI. Analyze user queries and recommend the most relevant courses. Respond only with a valid JSON array of course IDs. No explanations or additional text.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.7,
+      max_completion_tokens: 300,
+    });
+
+    // Log successful API call
+    logAPICall("ChatGPT Search Recommendations", true, null, prompt);
+
+    const content = response.choices[0].message.content.trim();
+
+    // Parse the JSON response
+    let recommendedCourseIds = [];
+    try {
+      recommendedCourseIds = JSON.parse(content);
+    } catch (parseError) {
+      // Try to extract JSON array from text
+      const match = content.match(/\[.*\]/s);
+      if (match) {
+        recommendedCourseIds = JSON.parse(match[0]);
+      } else {
+        console.error("Failed to parse ChatGPT response:", content);
+        return [];
+      }
+    }
+
+    // Validate that we got an array
+    if (!Array.isArray(recommendedCourseIds)) {
+      console.error("ChatGPT did not return an array:", recommendedCourseIds);
+      return [];
+    }
+
+    console.log(
+      `ChatGPT returned ${recommendedCourseIds.length} course recommendations for query: "${searchQuery}"`
+    );
+
+    return recommendedCourseIds;
+  } catch (error) {
+    console.error("ChatGPT API error for search:", error);
+
+    // Log failed API call
+    logAPICall("ChatGPT Search Recommendations", false, error, prompt);
+
+    // Log specific error details
+    if (error.response) {
+      console.error("API Response Error:", error.response.data);
+    }
+
+    // Throw specific error for limit reached
+    if (error.message === "API_LIMIT_REACHED") {
+      throw error;
+    }
+
+    throw new Error("Failed to generate AI search recommendations");
+  }
+};
+
 // Get API usage statistics
 const getAPIUsageStats = () => {
   return getUsageSummary();
@@ -200,5 +354,6 @@ const getAPIUsageStats = () => {
 
 module.exports = {
   generateCourseRecommendations,
+  generateAISearchRecommendations,
   getAPIUsageStats,
 };
