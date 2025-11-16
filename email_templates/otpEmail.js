@@ -13,7 +13,7 @@ const otpEmailTemplate = (otp, userName) => {
     <body>
       <div class="email-wrapper">
         <div class="header">
-          <img src="cid:logo" alt="LearnityxAi" class="logo">
+          <img src="https://res.cloudinary.com/djmulp0m9/image/upload/v1763276544/learnityxai/course-flyers/1763276542569-logo-no%20background.png" alt="LearnityxAi" class="logo">
           <h1>Password Reset Request</h1>
         </div>
         

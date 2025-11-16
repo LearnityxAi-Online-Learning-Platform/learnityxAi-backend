@@ -32,13 +32,6 @@ const sendOTPEmail = async (email, otp, userName) => {
       to: email,
       subject: "Your Password Reset Code",
       html: otpEmailTemplate(otp, userName),
-      attachments: [
-        {
-          filename: "logo.png",
-          path: process.env.LOGO_PATH || "./assets/logo.png",
-          cid: "logo",
-        },
-      ],
     };
 
     await transporter.sendMail(mailOptions);
@@ -64,13 +57,6 @@ const sendWelcomeEmail = async (email, userName, role) => {
       to: email,
       subject: `Welcome to LearnityxAi, ${userName}!`,
       html: welcomeEmailTemplate(userName, role),
-      attachments: [
-        {
-          filename: "logo.png",
-          path: process.env.LOGO_PATH || "./assets/logo.png",
-          cid: "logo",
-        },
-      ],
     };
 
     await transporter.sendMail(mailOptions);
@@ -110,13 +96,6 @@ const sendEnrollmentEmail = async (
         instructorName,
         courseDetails
       ),
-      attachments: [
-        {
-          filename: "logo.png",
-          path: process.env.LOGO_PATH || "./assets/logo.png",
-          cid: "logo",
-        },
-      ],
     };
 
     await transporter.sendMail(mailOptions);

@@ -34,7 +34,6 @@ const authenticateUser = async (req, res, next) => {
 
     try {
       const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
-
       const user = await User.findById(decoded.id).select("-password");
 
       if (!user) {
@@ -70,7 +69,7 @@ const authenticateUser = async (req, res, next) => {
               "User not found or inactive. Please log in again."
             );
           }
-
+          //remove expired toekens
           await user.cleanExpiredTokens();
 
           const tokenExists = user.refreshTokens.some(
