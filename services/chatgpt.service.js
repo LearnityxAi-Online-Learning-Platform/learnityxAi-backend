@@ -236,7 +236,7 @@ const generateAISearchRecommendations = async (searchQuery, availableCourses, us
       userContextText = `\n\nUser's Previously Enrolled Courses:\n${enrolledCoursesText}`;
     }
 
-    // Build available courses text (limit to top 50 for performance)
+    // Build available courses text  ony get top 50
     const topCourses = availableCourses.slice(0, 50);
     const availableCoursesText = topCourses
       .map(

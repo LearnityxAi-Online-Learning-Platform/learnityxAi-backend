@@ -94,13 +94,17 @@ const getAllCourses = async (req, res) => {
           userId: req.user._id,
         });
 
-        console.log(`[SearchHistory - getAllCourses] User ${req.user._id} has ${searchCount} searches`);
+        console.log(
+          `[SearchHistory - getAllCourses] User ${req.user._id} has ${searchCount} searches`
+        );
 
         // If user has 3 or more searches, delete the oldest ones
-        const MAX_SEARCH_HISTORY = 3; 
+        const MAX_SEARCH_HISTORY = 3;
         if (searchCount >= MAX_SEARCH_HISTORY) {
           const excessCount = searchCount - (MAX_SEARCH_HISTORY - 1); // Keep only (MAX-1)
-          console.log(`[SearchHistory - getAllCourses] Need to delete ${excessCount} old searches`);
+          console.log(
+            `[SearchHistory - getAllCourses] Need to delete ${excessCount} old searches`
+          );
 
           const oldestSearches = await SearchHistory.find({
             userId: req.user._id,
@@ -110,10 +114,17 @@ const getAllCourses = async (req, res) => {
             .select("_id");
 
           const idsToDelete = oldestSearches.map((search) => search._id);
-          console.log(`[SearchHistory - getAllCourses] Deleting IDs:`, idsToDelete);
+          console.log(
+            `[SearchHistory - getAllCourses] Deleting IDs:`,
+            idsToDelete
+          );
 
-          const deleteResult = await SearchHistory.deleteMany({ _id: { $in: idsToDelete } });
-          console.log(`[SearchHistory - getAllCourses] Deleted ${deleteResult.deletedCount} searches`);
+          const deleteResult = await SearchHistory.deleteMany({
+            _id: { $in: idsToDelete },
+          });
+          console.log(
+            `[SearchHistory - getAllCourses] Deleted ${deleteResult.deletedCount} searches`
+          );
         }
 
         // Create new search history entry
@@ -129,7 +140,9 @@ const getAllCourses = async (req, res) => {
             maxPrice: maxPrice ? Number(maxPrice) : undefined,
           },
         });
-        console.log(`[SearchHistory - getAllCourses] Created new search entry for query: "${search}"`);
+        console.log(
+          `[SearchHistory - getAllCourses] Created new search entry for query: "${search}"`
+        );
       } catch (searchError) {
         console.error("Error saving search history:", searchError);
       }
@@ -137,6 +150,8 @@ const getAllCourses = async (req, res) => {
 
     // Build Search query
     let query = { isActive: true };
+
+    // search query check in course name and discription
     if (search) {
       query.$or = [
         { courseName: { $regex: search, $options: "i" } },
@@ -193,7 +208,7 @@ const getAllCourses = async (req, res) => {
       .skip(skip)
       .limit(pageSize)
       .select("-enrolledStudents")
-      .lean();
+      .lean(); // convert mongoose doc to plain JS objects
 
     const totalCourses = await Course.countDocuments(query);
     const totalPages = Math.ceil(totalCourses / pageSize);
@@ -221,11 +236,11 @@ const getInstructorCourses = async (req, res) => {
     const {
       page = 1,
       size = 10,
-      includeInactive = 'false',
+      includeInactive = "false",
       category,
       duration,
       name,
-      tool
+      tool,
     } = req.query;
 
     const pageNum = Math.max(1, parseInt(page));
@@ -234,31 +249,31 @@ const getInstructorCourses = async (req, res) => {
 
     // Build query based on parameters
     const query = {
-      instructorId: req.user._id
+      instructorId: req.user._id,
     };
 
     // Only add isActive filter if includeInactive is false
-    if (includeInactive === 'false' || includeInactive === false) {
+    if (includeInactive === "false" || includeInactive === false) {
       query.isActive = true;
     }
 
     // Filter by category
-    if (category && category.trim() !== '') {
+    if (category && category.trim() !== "") {
       query.courseCategory = category.trim();
     }
 
     // Filter by duration
-    if (duration && duration.trim() !== '') {
+    if (duration && duration.trim() !== "") {
       query.duration = duration.trim();
     }
 
     // Filter by course name (case-insensitive search)
-    if (name && name.trim() !== '') {
-      query.courseName = { $regex: name.trim(), $options: 'i' };
+    if (name && name.trim() !== "") {
+      query.courseName = { $regex: name.trim(), $options: "i" };
     }
 
     // Filter by tool
-    if (tool && tool.trim() !== '') {
+    if (tool && tool.trim() !== "") {
       query.tools = { $in: [tool.trim()] };
     }
 
@@ -275,11 +290,11 @@ const getInstructorCourses = async (req, res) => {
     // Calculate counts for active and inactive courses
     const activeCourses = await Course.countDocuments({
       instructorId: req.user._id,
-      isActive: true
+      isActive: true,
     });
     const inactiveCourses = await Course.countDocuments({
       instructorId: req.user._id,
-      isActive: false
+      isActive: false,
     });
 
     return sendSuccessResponse(
@@ -300,14 +315,15 @@ const getInstructorCourses = async (req, res) => {
           activeCourses,
           inactiveCourses,
           totalCourses: activeCourses + inactiveCourses,
-          showingInactive: includeInactive === 'true' || includeInactive === true
+          showingInactive:
+            includeInactive === "true" || includeInactive === true,
         },
         appliedFilters: {
           category: category || null,
           duration: duration || null,
           name: name || null,
-          tool: tool || null
-        }
+          tool: tool || null,
+        },
       }
     );
   } catch (error) {
@@ -336,7 +352,11 @@ const getCourseById = async (req, res) => {
 
     // Only show active courses - no exceptions
     if (!course.isActive) {
-      return sendErrorResponse(res, 404, "Course not found or no longer available");
+      return sendErrorResponse(
+        res,
+        404,
+        "Course not found or no longer available"
+      );
     }
 
     return sendSuccessResponse(res, 200, "Course retrieved successfully", {
@@ -391,7 +411,8 @@ const updateCourse = async (req, res) => {
     if (courseName) course.courseName = courseName;
     if (courseCategory) course.courseCategory = courseCategory;
     if (description) course.description = description;
-    if (whatYouWillLearn !== undefined) course.whatYouWillLearn = whatYouWillLearn;
+    if (whatYouWillLearn !== undefined)
+      course.whatYouWillLearn = whatYouWillLearn;
     if (skills) course.skills = skills;
     if (tools !== undefined) course.tools = tools;
     if (startingDate) course.startingDate = startingDate;
@@ -487,16 +508,11 @@ const deactivateCourse = async (req, res) => {
     course.isActive = false;
     await course.save();
 
-    return sendSuccessResponse(
-      res,
-      200,
-      "Course deactivated successfully",
-      {
-        courseId: course._id,
-        courseName: course.courseName,
-        isActive: course.isActive,
-      }
-    );
+    return sendSuccessResponse(res, 200, "Course deactivated successfully", {
+      courseId: course._id,
+      courseName: course.courseName,
+      isActive: course.isActive,
+    });
   } catch (error) {
     console.error("Deactivate course error:", error);
     return sendErrorResponse(
@@ -536,16 +552,11 @@ const reactivateCourse = async (req, res) => {
     course.isActive = true;
     await course.save();
 
-    return sendSuccessResponse(
-      res,
-      200,
-      "Course reactivated successfully",
-      {
-        courseId: course._id,
-        courseName: course.courseName,
-        isActive: course.isActive,
-      }
-    );
+    return sendSuccessResponse(res, 200, "Course reactivated successfully", {
+      courseId: course._id,
+      courseName: course.courseName,
+      isActive: course.isActive,
+    });
   } catch (error) {
     console.error("Reactivate course error:", error);
     return sendErrorResponse(
@@ -625,9 +636,9 @@ const searchCourses = async (req, res) => {
       minRating,
       tools,
       duration,
-      sortBy = 'rating',
-      sortOrder = 'desc',
-      useAI = 'auto', // 'auto', 'true', or 'false'
+      sortBy = "rating",
+      sortOrder = "desc",
+      useAI = "auto", // 'auto', 'true', or 'false'
     } = req.query;
 
     // alow to browsing all courses with filters and sorting
@@ -637,29 +648,53 @@ const searchCourses = async (req, res) => {
     let validatedMaxPrice = null;
     let validatedMinRating = null;
 
-    if (minPrice !== undefined && minPrice !== '') {
+    if (minPrice !== undefined && minPrice !== "") {
       validatedMinPrice = Number(minPrice);
       if (isNaN(validatedMinPrice) || validatedMinPrice < 0) {
-        return sendErrorResponse(res, 400, "minPrice must be a valid non-negative number");
+        return sendErrorResponse(
+          res,
+          400,
+          "minPrice must be a valid non-negative number"
+        );
       }
     }
 
-    if (maxPrice !== undefined && maxPrice !== '') {
+    if (maxPrice !== undefined && maxPrice !== "") {
       validatedMaxPrice = Number(maxPrice);
       if (isNaN(validatedMaxPrice) || validatedMaxPrice < 0) {
-        return sendErrorResponse(res, 400, "maxPrice must be a valid non-negative number");
+        return sendErrorResponse(
+          res,
+          400,
+          "maxPrice must be a valid non-negative number"
+        );
       }
     }
 
     // Check price range validity
-    if (validatedMinPrice !== null && validatedMaxPrice !== null && validatedMinPrice > validatedMaxPrice) {
-      return sendErrorResponse(res, 400, "minPrice cannot be greater than maxPrice");
+    if (
+      validatedMinPrice !== null &&
+      validatedMaxPrice !== null &&
+      validatedMinPrice > validatedMaxPrice
+    ) {
+      return sendErrorResponse(
+        res,
+        400,
+        "minPrice cannot be greater than maxPrice"
+      );
     }
 
-    if (minRating !== undefined && minRating !== '') {
+    if (minRating !== undefined && minRating !== "") {
       validatedMinRating = Number(minRating);
-      if (isNaN(validatedMinRating) || validatedMinRating < 0 || validatedMinRating > 5) {
-        return sendErrorResponse(res, 400, "minRating must be a number between 0 and 5");
+      if (
+        isNaN(validatedMinRating) ||
+        validatedMinRating < 0 ||
+        validatedMinRating > 5
+      ) {
+        return sendErrorResponse(
+          res,
+          400,
+          "minRating must be a number between 0 and 5"
+        );
       }
     }
 
@@ -676,31 +711,47 @@ const searchCourses = async (req, res) => {
     }
 
     // 3. Validate sortBy and sortOrder
-    const validSortFields = ['rating', 'price', 'createdAt', 'numberOfUserEnrolled', 'enrollmentCount'];
-    const validatedSortBy = validSortFields.includes(sortBy) ? sortBy : 'rating';
-    const validatedSortOrder = ['asc', 'desc'].includes(sortOrder?.toLowerCase()) ? sortOrder.toLowerCase() : 'desc';
+    const validSortFields = [
+      "rating",
+      "price",
+      "createdAt",
+      "numberOfUserEnrolled",
+      "enrollmentCount",
+    ];
+    const validatedSortBy = validSortFields.includes(sortBy)
+      ? sortBy
+      : "rating";
+    const validatedSortOrder = ["asc", "desc"].includes(
+      sortOrder?.toLowerCase()
+    )
+      ? sortOrder.toLowerCase()
+      : "desc";
 
     // 4. Sanitize search string to prevent regex injection
     let sanitizedSearch = search;
-    if (search && typeof search === 'string') {
+    if (search && typeof search === "string") {
       // Limit search length to prevent DoS
       if (search.length > 200) {
-        return sendErrorResponse(res, 400, "Search query is too long (max 200 characters)");
+        return sendErrorResponse(
+          res,
+          400,
+          "Search query is too long (max 200 characters)"
+        );
       }
       // Trim and remove excessive whitespace
-      sanitizedSearch = search.trim().replace(/\s+/g, ' ');
+      sanitizedSearch = search.trim().replace(/\s+/g, " ");
     }
 
     // 5. Validate category, tools, duration strings
-    if (category && typeof category !== 'string') {
+    if (category && typeof category !== "string") {
       return sendErrorResponse(res, 400, "category must be a string");
     }
 
-    if (tools && typeof tools !== 'string') {
+    if (tools && typeof tools !== "string") {
       return sendErrorResponse(res, 400, "tools must be a string");
     }
 
-    if (duration && typeof duration !== 'string') {
+    if (duration && typeof duration !== "string") {
       return sendErrorResponse(res, 400, "duration must be a string");
     }
 
@@ -712,7 +763,9 @@ const searchCourses = async (req, res) => {
           userId: req.user._id,
         });
 
-        console.log(`[SearchHistory] User ${req.user._id} has ${searchCount} searches`);
+        console.log(
+          `[SearchHistory] User ${req.user._id} has ${searchCount} searches`
+        );
 
         // If user has 10 or more searches, delete the oldest ones
         const MAX_SEARCH_HISTORY = 10;
@@ -730,7 +783,9 @@ const searchCourses = async (req, res) => {
           const idsToDelete = oldestSearches.map((search) => search._id);
           // console.log(`[SearchHistory] Deleting IDs:`, idsToDelete);
 
-          const deleteResult = await SearchHistory.deleteMany({ _id: { $in: idsToDelete } });
+          const deleteResult = await SearchHistory.deleteMany({
+            _id: { $in: idsToDelete },
+          });
           // console.log(`[SearchHistory] Deleted ${deleteResult.deletedCount} searches`);
         }
 
@@ -749,7 +804,9 @@ const searchCourses = async (req, res) => {
               duration: duration || undefined,
             },
           });
-          console.log(`[SearchHistory] Created new search entry for query: "${sanitizedSearch}"`);
+          console.log(
+            `[SearchHistory] Created new search entry for query: "${sanitizedSearch}"`
+          );
         }
       } catch (searchError) {
         console.error("Error saving search history:", searchError);
@@ -761,21 +818,20 @@ const searchCourses = async (req, res) => {
     const userId = isAuthenticated ? req.user._id : null;
 
     // Detect if query looks like a natural language question
-    const isNaturalLanguageQuery = sanitizedSearch && (
-      sanitizedSearch.toLowerCase().includes('i want') ||
-      sanitizedSearch.toLowerCase().includes('how to') ||
-      sanitizedSearch.toLowerCase().includes('should i') ||
-      sanitizedSearch.toLowerCase().includes('what course') ||
-      sanitizedSearch.toLowerCase().includes('best course') ||
-      sanitizedSearch.toLowerCase().includes('become a') ||
-      sanitizedSearch.toLowerCase().includes('learn to') ||
-      sanitizedSearch.split(' ').length > 5 // Long queries are likely natural language
-    );
+    const isNaturalLanguageQuery =
+      sanitizedSearch &&
+      (sanitizedSearch.toLowerCase().includes("i want") ||
+        sanitizedSearch.toLowerCase().includes("how to") ||
+        sanitizedSearch.toLowerCase().includes("should i") ||
+        sanitizedSearch.toLowerCase().includes("what course") ||
+        sanitizedSearch.toLowerCase().includes("best course") ||
+        sanitizedSearch.toLowerCase().includes("become a") ||
+        sanitizedSearch.toLowerCase().includes("learn to") ||
+        sanitizedSearch.split(" ").length > 5); // Long queries are likely natural language
 
-    const shouldUseAI = (
-      (useAI === 'true') ||
-      (useAI === 'auto' && isNaturalLanguageQuery && sanitizedSearch)
-    );
+    const shouldUseAI =
+      useAI === "true" ||
+      (useAI === "auto" && isNaturalLanguageQuery && sanitizedSearch);
 
     // Try AI-powered search if conditions are met (requires authentication)
     if (shouldUseAI && sanitizedSearch && isAuthenticated) {
@@ -785,7 +841,9 @@ const searchCourses = async (req, res) => {
         const apiStats = getAPIUsageStats();
 
         if (userLimitCheck.canMakeRequest) {
-          console.log(`[AI Search Integration] Using AI for query: "${sanitizedSearch}"`);
+          console.log(
+            `[AI Search Integration] Using AI for query: "${sanitizedSearch}"`
+          );
 
           // Get user's enrolled courses for context
           const enrolledCourses = await Course.find({
@@ -802,12 +860,16 @@ const searchCourses = async (req, res) => {
           if (category) aiQuery.courseCategory = category;
           if (validatedMinPrice !== null || validatedMaxPrice !== null) {
             aiQuery.price = {};
-            if (validatedMinPrice !== null) aiQuery.price.$gte = validatedMinPrice;
-            if (validatedMaxPrice !== null) aiQuery.price.$lte = validatedMaxPrice;
+            if (validatedMinPrice !== null)
+              aiQuery.price.$gte = validatedMinPrice;
+            if (validatedMaxPrice !== null)
+              aiQuery.price.$lte = validatedMaxPrice;
           }
-          if (validatedMinRating !== null) aiQuery.rating = { $gte: validatedMinRating };
+          if (validatedMinRating !== null)
+            aiQuery.rating = { $gte: validatedMinRating };
           if (tools) aiQuery.tools = { $regex: tools, $options: "i" };
-          if (duration) aiQuery.duration = { $regex: `^${duration}$`, $options: "i" };
+          if (duration)
+            aiQuery.duration = { $regex: `^${duration}$`, $options: "i" };
 
           const allCourses = await Course.find(aiQuery)
             .select(
@@ -815,7 +877,8 @@ const searchCourses = async (req, res) => {
             )
             .lean();
 
-          const userContext = enrolledCourses.length > 0 ? { enrolledCourses } : null;
+          const userContext =
+            enrolledCourses.length > 0 ? { enrolledCourses } : null;
           const recommendedCourseIds = await generateAISearchRecommendations(
             sanitizedSearch,
             allCourses,
@@ -825,61 +888,74 @@ const searchCourses = async (req, res) => {
           if (recommendedCourseIds && recommendedCourseIds.length > 0) {
             // AI search successful - return AI-ordered results
             const courseMap = new Map(
-              allCourses.map(course => [course._id.toString(), course])
+              allCourses.map((course) => [course._id.toString(), course])
             );
 
             let aiSortedCourses = recommendedCourseIds
-              .map(id => courseMap.get(id))
-              .filter(course => course !== undefined);
+              .map((id) => courseMap.get(id))
+              .filter((course) => course !== undefined);
 
             // Only return AI-recommended courses for focused, relevant results
 
             // Apply pagination
             const skip = (pageNum - 1) * pageSize;
-            const paginatedCourses = aiSortedCourses.slice(skip, skip + pageSize);
+            const paginatedCourses = aiSortedCourses.slice(
+              skip,
+              skip + pageSize
+            );
             const totalCourses = aiSortedCourses.length;
             const totalPages = Math.ceil(totalCourses / pageSize);
 
             const updatedApiStats = getAPIUsageStats();
-            return sendSuccessResponse(res, 200, "AI-powered search results retrieved", {
-              courses: paginatedCourses,
-              pagination: {
-                currentPage: pageNum,
-                pageSize: pageSize,
-                totalCourses,
-                totalPages,
-                hasNextPage: pageNum < totalPages,
-                hasPrevPage: pageNum > 1,
-              },
-              searchQuery: sanitizedSearch || '',
-              recommendationType: 'ai-powered',
-              authenticated: true,
-              apiUsage: {
-                global: {
-                  used: updatedApiStats.totalCalls,
-                  remaining: updatedApiStats.remainingCalls,
-                  limit: updatedApiStats.maxCalls,
-                  percentageUsed: updatedApiStats.percentageUsed,
+            return sendSuccessResponse(
+              res,
+              200,
+              "AI-powered search results retrieved",
+              {
+                courses: paginatedCourses,
+                pagination: {
+                  currentPage: pageNum,
+                  pageSize: pageSize,
+                  totalCourses,
+                  totalPages,
+                  hasNextPage: pageNum < totalPages,
+                  hasPrevPage: pageNum > 1,
                 },
-                personal: {
-                  used: userUsage.dailyRequestsUsed + 1,
-                  remaining: userUsage.remainingRequests - 1,
-                  limit: userUsage.dailyRequestsLimit,
-                  hoursUntilReset: userUsage.hoursUntilReset,
+                searchQuery: sanitizedSearch || "",
+                recommendationType: "ai-powered",
+                authenticated: true,
+                apiUsage: {
+                  global: {
+                    used: updatedApiStats.totalCalls,
+                    remaining: updatedApiStats.remainingCalls,
+                    limit: updatedApiStats.maxCalls,
+                    percentageUsed: updatedApiStats.percentageUsed,
+                  },
+                  personal: {
+                    used: userUsage.dailyRequestsUsed + 1,
+                    remaining: userUsage.remainingRequests - 1,
+                    limit: userUsage.dailyRequestsLimit,
+                    hoursUntilReset: userUsage.hoursUntilReset,
+                  },
                 },
-              },
-            });
+              }
+            );
           }
         } else {
-          console.log(`[AI Search Integration] User ${userId} has reached daily AI limit, falling back to keyword search`);
+          console.log(
+            `[AI Search Integration] User ${userId} has reached daily AI limit, falling back to keyword search`
+          );
         }
       } catch (aiError) {
-        console.error("AI search integration error, falling back to keyword search:", aiError);
+        console.error(
+          "AI search integration error, falling back to keyword search:",
+          aiError
+        );
         // Continue with regular search on error
       }
     }
 
-    // === FALLBACK TO REGULAR KEYWORD SEARCH ===
+    // Falback regular keyword search by bacjkend 
     // Build flexible search query with pattern matching
     let searchConditions = [];
 
@@ -891,35 +967,60 @@ const searchCourses = async (req, res) => {
       // If this looks like a natural language question, extract keywords
       if (isNaturalLanguageQuery) {
         // Remove common filler words but keep important ones
-        const stopWords = ['i', 'want', 'wants', 'to', 'be', 'a', 'an', 'the', 'how', 'what', 'should', 'course', 'courses', 'learn', 'become', 'get', 'follow'];
+        const stopWords = [
+          "i",
+          "want",
+          "wants",
+          "to",
+          "be",
+          "a",
+          "an",
+          "the",
+          "how",
+          "what",
+          "should",
+          "course",
+          "courses",
+          "learn",
+          "become",
+          "get",
+          "follow",
+        ];
         const words = sanitizedSearch.toLowerCase().split(/\s+/);
-        const keywords = words.filter(word =>
-          word.length > 2 && !stopWords.includes(word)
+        const keywords = words.filter(
+          (word) => word.length > 2 && !stopWords.includes(word)
         );
 
         // Use extracted keywords if we found any, otherwise keep original
         if (keywords.length > 0) {
-          normalizedSearch = keywords.join(' ');
-          console.log(`[Keyword Extraction] Original: "${sanitizedSearch}" -> Keywords: "${normalizedSearch}"`);
+          normalizedSearch = keywords.join(" ");
+          console.log(
+            `[Keyword Extraction] Original: "${sanitizedSearch}" -> Keywords: "${normalizedSearch}"`
+          );
         } else {
           // If all words were filtered out, use the original query
-          console.log(`[Keyword Extraction] No keywords found, using original: "${sanitizedSearch}"`);
+          console.log(
+            `[Keyword Extraction] No keywords found, using original: "${sanitizedSearch}"`
+          );
         }
       }
 
       // Split search into individual words for partial matching
-      const searchWords = normalizedSearch.split(' ').filter(word => word.length > 0);
+      const searchWords = normalizedSearch
+        .split(" ")
+        .filter((word) => word.length > 0);
 
       // Detect if search query is a duration pattern (e.g., "1 week", "6 weeks", "3 months")
-      const durationPattern = /^(\d+)\s*(week|weeks|month|months|day|days|hour|hours)$/i;
+      const durationPattern =
+        /^(\d+)\s*(week|weeks|month|months|day|days|hour|hours)$/i;
       const isDurationQuery = durationPattern.test(normalizedSearch);
 
       // This allows for partial matches and handles spacing issues
-      const wordPatterns = searchWords.map(word => {
+      const wordPatterns = searchWords.map((word) => {
         // Escape special regex characters
-        const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         // Create patern that allows for flexible matching
-        return new RegExp(escapedWord, 'i');
+        return new RegExp(escapedWord, "i");
       });
 
       // If it's a duration query, use exact matching for duration field
@@ -930,14 +1031,14 @@ const searchCourses = async (req, res) => {
         const unit = match[2].toLowerCase();
 
         // Normalize unit to handle singular/plural (week/weeks)
-        const normalizedUnit = unit.endsWith('s') ? unit : unit + 's?';
+        const normalizedUnit = unit.endsWith("s") ? unit : unit + "s?";
 
         // Create exact duration pattern: "X week(s)" or "X weeks"
         const exactDurationPattern = `^${number}\\s*${normalizedUnit}$`;
 
-        searchConditions.push(
-          { duration: { $regex: exactDurationPattern, $options: "i" } }
-        );
+        searchConditions.push({
+          duration: { $regex: exactDurationPattern, $options: "i" },
+        });
 
         // Also search in other fields in case duration is mentioned in description
         searchConditions.push(
@@ -949,7 +1050,7 @@ const searchCourses = async (req, res) => {
         // Standard flexible search logic for non-duration queries
 
         // 1. Exact phrase match (highest priority) - remove spaces for flexibility
-        const noSpaceSearch = normalizedSearch.replace(/\s+/g, '');
+        const noSpaceSearch = normalizedSearch.replace(/\s+/g, "");
         searchConditions.push(
           { courseName: { $regex: normalizedSearch, $options: "i" } },
           { description: { $regex: normalizedSearch, $options: "i" } },
@@ -962,8 +1063,11 @@ const searchCourses = async (req, res) => {
         );
 
         // 2. Match with spaces removed (handles "webdevelopment" vs "web development")
-        if (normalizedSearch.includes(' ') || noSpaceSearch !== normalizedSearch) {
-          const noSpacePattern = noSpaceSearch.split('').join('\\s*');
+        if (
+          normalizedSearch.includes(" ") ||
+          noSpaceSearch !== normalizedSearch
+        ) {
+          const noSpacePattern = noSpaceSearch.split("").join("\\s*");
           searchConditions.push(
             { courseName: { $regex: noSpacePattern, $options: "i" } },
             { description: { $regex: noSpacePattern, $options: "i" } },
@@ -978,8 +1082,9 @@ const searchCourses = async (req, res) => {
         // 3. Individual word matches (handles partial searches like "web developer", "data scientist")
         if (searchWords.length >= 2) {
           // For multi-word searches, also search for individual words
-          searchWords.forEach(word => {
-            if (word.length > 3) { // Only search for words longer than 3 characters
+          searchWords.forEach((word) => {
+            if (word.length > 3) {
+              // Only search for words longer than 3 characters
               searchConditions.push(
                 { courseName: { $regex: word, $options: "i" } },
                 { description: { $regex: word, $options: "i" } },
@@ -1034,12 +1139,15 @@ const searchCourses = async (req, res) => {
     const skip = (pageNum - 1) * pageSize;
 
     // Dynamic sorting (using validated values from above)
-    const actualSortField = validatedSortBy === 'enrollmentCount' ? 'numberOfUserEnrolled' : validatedSortBy;
-    const sortDirection = validatedSortOrder === 'asc' ? 1 : -1;
+    const actualSortField =
+      validatedSortBy === "enrollmentCount"
+        ? "numberOfUserEnrolled"
+        : validatedSortBy;
+    const sortDirection = validatedSortOrder === "asc" ? 1 : -1;
     const sortOptions = { [actualSortField]: sortDirection };
 
     // Add secondary sort by createdAt for consistency
-    if (actualSortField !== 'createdAt') {
+    if (actualSortField !== "createdAt") {
       sortOptions.createdAt = -1;
     }
 
@@ -1064,17 +1172,23 @@ const searchCourses = async (req, res) => {
         hasNextPage: pageNum < totalPages,
         hasPrevPage: pageNum > 1,
       },
-      searchQuery: sanitizedSearch || '',
-      recommendationType: 'keyword-based',
+      searchQuery: sanitizedSearch || "",
+      recommendationType: "keyword-based",
       authenticated: !!isAuthenticated, // Convert to boolean
     };
 
     // Add message for non-authenticated users who tried natural language query
     if (!isAuthenticated && isNaturalLanguageQuery) {
-      responseData.message = 'Login to get AI-powered course recommendations for your query';
+      responseData.message =
+        "Login to get AI-powered course recommendations for your query";
     }
 
-    return sendSuccessResponse(res, 200, "Search results retrieved", responseData);
+    return sendSuccessResponse(
+      res,
+      200,
+      "Search results retrieved",
+      responseData
+    );
   } catch (error) {
     console.error("Search courses error:", error);
     return sendErrorResponse(
@@ -1165,11 +1279,7 @@ const unenrollFromCourse = async (req, res) => {
 
     // Check if student is enrolled
     if (!course.enrolledStudents.includes(req.user._id)) {
-      return sendErrorResponse(
-        res,
-        400,
-        "You are not enrolled in this course"
-      );
+      return sendErrorResponse(res, 400, "You are not enrolled in this course");
     }
 
     // Remove student from enrolled students
@@ -1252,14 +1362,9 @@ const getEnrolledCourses = async (req, res) => {
 // AI-powered course search using ChatGPT
 const aiSearchCourses = async (req, res) => {
   try {
-    const {
-      query,
-      page = 1,
-      size = 10,
-      useAI = 'true'
-    } = req.query;
+    const { query, page = 1, size = 10, useAI = "true" } = req.query;
 
-    if (!query || query.trim() === '') {
+    if (!query || query.trim() === "") {
       return sendErrorResponse(res, 400, "Search query is required");
     }
 
@@ -1278,7 +1383,9 @@ const aiSearchCourses = async (req, res) => {
           userId: req.user._id,
         });
 
-        console.log(`[AI Search History] User ${req.user._id} has ${searchCount} searches`);
+        console.log(
+          `[AI Search History] User ${req.user._id} has ${searchCount} searches`
+        );
 
         const MAX_SEARCH_HISTORY = 10;
         if (searchCount >= MAX_SEARCH_HISTORY) {
@@ -1300,7 +1407,9 @@ const aiSearchCourses = async (req, res) => {
           searchType: "ai_course_search",
           filters: {},
         });
-        console.log(`[AI Search History] Created new search entry for query: "${sanitizedQuery}"`);
+        console.log(
+          `[AI Search History] Created new search entry for query: "${sanitizedQuery}"`
+        );
       } catch (searchError) {
         console.error("Error saving AI search history:", searchError);
       }
@@ -1335,7 +1444,7 @@ const aiSearchCourses = async (req, res) => {
     let apiUsageInfo = null;
 
     // Check if user wants AI recommendations and if authenticated user can use AI
-    const shouldUseAI = useAI === 'true' || useAI === true;
+    const shouldUseAI = useAI === "true" || useAI === true;
 
     if (shouldUseAI && isAuthenticated) {
       // Check if user can make a ChatGPT request (per-user limit check)
@@ -1392,20 +1501,23 @@ const aiSearchCourses = async (req, res) => {
           if (recommendedCourseIds && recommendedCourseIds.length > 0) {
             // Sort courses based on AI recommendation order
             const courseMap = new Map(
-              allCourses.map(course => [course._id.toString(), course])
+              allCourses.map((course) => [course._id.toString(), course])
             );
 
             sortedCourses = recommendedCourseIds
-              .map(id => courseMap.get(id))
-              .filter(course => course !== undefined);
+              .map((id) => courseMap.get(id))
+              .filter((course) => course !== undefined);
 
             recommendationType = "ai-powered";
 
             // If AI didn't return enough courses, add keyword-based results
             if (sortedCourses.length < allCourses.length) {
-              const existingIds = new Set(sortedCourses.map(c => c._id.toString()));
-              const additionalCourses = allCourses
-                .filter(c => !existingIds.has(c._id.toString()));
+              const existingIds = new Set(
+                sortedCourses.map((c) => c._id.toString())
+              );
+              const additionalCourses = allCourses.filter(
+                (c) => !existingIds.has(c._id.toString())
+              );
               sortedCourses = [...sortedCourses, ...additionalCourses];
             }
           } else {
@@ -1427,10 +1539,12 @@ const aiSearchCourses = async (req, res) => {
 
           if (error.message === "API_LIMIT_REACHED") {
             recommendationType = "keyword-based";
-            errorMessage = "Global AI search limit reached. Showing keyword-based results.";
+            errorMessage =
+              "Global AI search limit reached. Showing keyword-based results.";
           } else {
             recommendationType = "keyword-based";
-            errorMessage = "AI search temporarily unavailable. Showing keyword-based results.";
+            errorMessage =
+              "AI search temporarily unavailable. Showing keyword-based results.";
           }
 
           sortedCourses = allCourses;
@@ -1448,14 +1562,19 @@ const aiSearchCourses = async (req, res) => {
     // Apply keyword filtering if using keyword-based search
     if (recommendationType === "keyword-based") {
       const searchLower = sanitizedQuery.toLowerCase();
-      sortedCourses = sortedCourses.filter(course => {
+      sortedCourses = sortedCourses.filter((course) => {
         return (
           course.courseName.toLowerCase().includes(searchLower) ||
           course.description.toLowerCase().includes(searchLower) ||
           course.courseCategory.toLowerCase().includes(searchLower) ||
-          course.skills.some(skill => skill.toLowerCase().includes(searchLower)) ||
-          course.tools.some(tool => tool.toLowerCase().includes(searchLower)) ||
-          (course.instructorName && course.instructorName.toLowerCase().includes(searchLower))
+          course.skills.some((skill) =>
+            skill.toLowerCase().includes(searchLower)
+          ) ||
+          course.tools.some((tool) =>
+            tool.toLowerCase().includes(searchLower)
+          ) ||
+          (course.instructorName &&
+            course.instructorName.toLowerCase().includes(searchLower))
         );
       });
 
@@ -1508,11 +1627,7 @@ const aiSearchCourses = async (req, res) => {
     );
   } catch (error) {
     console.error("AI search courses error:", error);
-    return sendErrorResponse(
-      res,
-      500,
-      "Server error while searching courses"
-    );
+    return sendErrorResponse(res, 500, "Server error while searching courses");
   }
 };
 

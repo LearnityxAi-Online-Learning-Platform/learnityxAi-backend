@@ -6,9 +6,8 @@ const UserAPIRequest = require("../models/UserAPIRequest.model");
 const MAX_DAILY_REQUESTS_PER_USER = 10;
 const CACHE_DURATION_HOURS = 24;
 
-/**
- * Generate hash of user state to detect changes
- */
+
+// Generate hash of user state to detect changes
 const generateUserStateHash = (enrolledCourses, searchHistory) => {
   const enrolledIds = enrolledCourses.map((c) => c._id.toString()).sort();
   const searches = searchHistory.map((s) => s.searchQuery).slice(0, 10);
@@ -21,9 +20,7 @@ const generateUserStateHash = (enrolledCourses, searchHistory) => {
   return crypto.createHash("md5").update(stateString).digest("hex");
 };
 
-/**
- * Check if user can make a ChatGPT API request
- */
+// Check if user can make a ChatGPT API request
 const checkUserRequestLimit = async (userId) => {
   try {
     const dailyCount = await UserAPIRequest.getDailyRequestCount(userId);
@@ -53,9 +50,8 @@ const checkUserRequestLimit = async (userId) => {
   }
 };
 
-/**
- * Get cached recommendations if available and valid
- */
+
+// Get cached recommendations if available and valid
 const getCachedRecommendations = async (userId, userStateHash) => {
   try {
     const cached = await UserAPIRequest.getCachedResponse(
@@ -69,9 +65,9 @@ const getCachedRecommendations = async (userId, userStateHash) => {
   }
 };
 
-/**
- * Log user API request and cache response
- */
+
+// Log user API request and cache response
+
 const logUserAPIRequest = async (
   userId,
   userStateHash,
@@ -109,9 +105,8 @@ const logUserAPIRequest = async (
   }
 };
 
-/**
- * Get user's API usage summary
- */
+
+// Get user's API usage summary
 const getUserUsageSummary = async (userId) => {
   try {
     const dailyCount = await UserAPIRequest.getDailyRequestCount(userId);
