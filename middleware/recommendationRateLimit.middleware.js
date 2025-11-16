@@ -1,5 +1,5 @@
 // Rate Limiting Middleware for Recommendation Endpoint
-// Prevents rapid consecutive requests (1 request per 30 seconds per user)
+// Prevents rapid consecutive requests (1 request per 20 seconds per user)
 
 // Store for tracking last request time per user
 const userLastRequestTime = new Map();

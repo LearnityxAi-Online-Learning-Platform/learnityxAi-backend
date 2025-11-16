@@ -389,8 +389,6 @@ const updateProfile = async (req, res) => {
     await user.save();
 
     // If instructor's profile was updated, update the instructorName in all their courses
-    // Note: Other instructor details (email, profileImage, bio) are fetched dynamically via populate()
-    // when courses are retrieved, so they don't need to be stored in the Course model
     if (user.role === 'instructor' && isProfileUpdated) {
       const updatedInstructorName = `${user.firstName} ${user.lastName}`;
 
@@ -398,8 +396,7 @@ const updateProfile = async (req, res) => {
         { instructorId: user._id },
         { $set: { instructorName: updatedInstructorName } }
       );
-
-      console.log(`Updated instructor name to "${updatedInstructorName}" for all courses created by user ${user._id}`);
+      // console.log(`Updated instructor name to "${updatedInstructorName}" for all courses created by user ${user._id}`);
     }
 
     const userResponse = user.getPublicProfile();

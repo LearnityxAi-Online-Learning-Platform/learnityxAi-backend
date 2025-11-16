@@ -833,7 +833,6 @@ const searchCourses = async (req, res) => {
               .filter(course => course !== undefined);
 
             // Only return AI-recommended courses for focused, relevant results
-            // Do not add all remaining courses to keep recommendations precise
 
             // Apply pagination
             const skip = (pageNum - 1) * pageSize;
@@ -915,7 +914,6 @@ const searchCourses = async (req, res) => {
       const durationPattern = /^(\d+)\s*(week|weeks|month|months|day|days|hour|hours)$/i;
       const isDurationQuery = durationPattern.test(normalizedSearch);
 
-      // Create flexble regex patterns for each word
       // This allows for partial matches and handles spacing issues
       const wordPatterns = searchWords.map(word => {
         // Escape special regex characters

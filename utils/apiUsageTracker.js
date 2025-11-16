@@ -36,7 +36,7 @@ const getUsageStats = () => {
     if (!fs.existsSync(USAGE_FILE_PATH)) {
       initializeUsageTracking();
     }
-
+ 
     const data = fs.readFileSync(USAGE_FILE_PATH, "utf8");
     return JSON.parse(data);
   } catch (error) {
