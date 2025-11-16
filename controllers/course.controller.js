@@ -755,7 +755,7 @@ const searchCourses = async (req, res) => {
       return sendErrorResponse(res, 400, "duration must be a string");
     }
 
-    // Save search history for authenticated users
+    // Save search history for authenticated users - ai powrd 
     if (req.user) {
       try {
         // Check current search history count for this user
@@ -813,7 +813,7 @@ const searchCourses = async (req, res) => {
       }
     }
 
-    // === AI-POWERED SEARCH INTEGRATION ===
+    // === Ai powered search
     const isAuthenticated = req.user && req.user._id;
     const userId = isAuthenticated ? req.user._id : null;
 
@@ -956,7 +956,7 @@ const searchCourses = async (req, res) => {
     }
 
     // Falback regular keyword search by bacjkend 
-    // Build flexible search query with pattern matching
+    // Build search query with pattern matching
     let searchConditions = [];
 
     // Only build search conditions if search query is provided
